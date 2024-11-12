@@ -3402,17 +3402,11 @@ a:focus, :focus, .btn:focus, .btn.focus, .btn:active:focus, .btn:active.focus, .
     line-height: 28px;
   }
 .container-checkout {
-	max-width: 820px;
+	max-width: 1024px;
 	margin-left: auto;
   margin-right: auto;
-  padding-left: 8px;
-  padding-right: 8px;
-}
-@media (max-width: 767px) {
-  .container-checkout {
-      padding-left: 0;
-      padding-right: 0;
-  }
+  padding-left: 16px;
+  padding-right: 16px;
 }
 .page-logon .container-checkout {
 	max-width: 1022px;
@@ -5709,8 +5703,6 @@ button.close {
 @media screen and (max-width: 767px) {
   .page-view .checkout-content {
       margin-bottom: 36px;
-      border: 0;
-      border-radius: 0 0 16px 16px;
   }
 }
 .btn-block-xs {
@@ -6712,4 +6704,11 @@ input:autofill, textarea:autofill, select:autofill, input:autofill:hover, input:
 .hgroup-card h4 .label-ideal {
   padding-left: 24px;
   background: url(../../img/icons/icon-tab-ideal.svg) no-repeat 0 center;
+}
+.back-level {
+  padding: 24px 24px 0;
+  font-size: 16px;
+}
+.container-checkout.container-checkout-wide {
+  max-width: 1700px;
 }
