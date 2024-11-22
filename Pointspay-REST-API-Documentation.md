@@ -17,10 +17,10 @@ The Pointspay APIs are organized around REST principles. Data objects are repres
 
 Live and sandbox environments are available. The endpoints for the two environments are as below:
 
-|**Environment** |**Endpoint** |
-| - | - |
-|Sandbox |https://uat-secure.pointspay.com|
-|Live |https://secure.pointspay.com|
+| **Environment** | **Endpoint** |
+| :- | :- |
+| Sandbox | https://uat-secure.pointspay.com |
+| Live | https://secure.pointspay.com |
 
 _Table 1_
 
@@ -45,24 +45,24 @@ Follow the below process to generate the keypair to sign the transaction request
 - Generate a private-public key pair and obtain a certificate corresponding to the public certificate. We recommend using an 8192-bit key to accommodate the payload size.
 - The certificate can be either self-signed or signed by a Certificate Authority (CA). Commands for self-signed certificate generation using openssl command:
 
-|**Open SSL Commands**|
-| - |
-|-- Generate private certificate<br>`openssl req -newkey rsa:8192 -nodes -keyout key.pem -x509 -days 1095 -out certificate.cer -sha256`|
+| **Open SSL Commands** |
+| :- |
+| -- Generate private certificate<br>`openssl req -newkey rsa:8192 -nodes -keyout key.pem -x509 -days 1095 -out certificate.cer -sha256` |
 
 Alternatively, the below Java keytool command can be also used:
 
-|**Generate a private/public key pair**|
-| - |
-|`keytool -genkeypair -alias  <<your alias>>  -keys -keyalg RSA -keysize 8192 -dname "CN=<<Name>>" -validity 1095 -storetype PKCS12 -keystore <<KeyStore Name>> -storepass  <<your password>>`<br>e.g.<br>`keytool -genkeypair -alias prod-merchant-signature-keys -keyalg RSA -keysize 8192 -dname </p><p>“CN=prod-merchant” -validity 1095 -storetype PKCS12 -keystore prod-merchant-signature- keys.p12  -storepass 12345`|
+| **Generate a private/public key pair** |
+| :- |
+| `keytool -genkeypair -alias  <<your alias>>  -keys -keyalg RSA -keysize 8192 -dname "CN=<<Name>>" -validity 1095 -storetype PKCS12 -keystore <<KeyStore Name>> -storepass  <<your password>>`<br>e.g.<br>`keytool -genkeypair -alias prod-merchant-signature-keys -keyalg RSA -keysize 8192 -dname </p><p>“CN=prod-merchant” -validity 1095 -storetype PKCS12 -keystore prod-merchant-signature- keys.p12  -storepass 12345` |
 
-|**Export the public certificate from a p12/pfx file**|
-| - |
-|`keytool -exportcert -alias <<your alias>>  -keys -storetype PKCS12 -keystore <<your alias >>.p12 -file <<CertificateName>>.cer -rfc -storepass <<your password>>`<br>e.g.<br>`keytool -exportcert -alias prod-merchant-signature-keys -storetype PKCS12 -keystore prod-merchant-signature-keys.p12 -file prod-merchant-public-certificate.cer -rfc -storepass 12345`|
+| **Export the public certificate from a p12/pfx file** |
+| :- |
+| `keytool -exportcert -alias <<your alias>>  -keys -storetype PKCS12 -keystore <<your alias >>.p12 -file <<CertificateName>>.cer -rfc -storepass <<your password>>`<br>e.g.<br>`keytool -exportcert -alias prod-merchant-signature-keys -storetype PKCS12 -keystore prod-merchant-signature-keys.p12 -file prod-merchant-public-certificate.cer -rfc -storepass 12345` |
 
 1. Share the public certificate (.cer) file with Pointspay which will be added in the trust store at Pointspay side.
 2. The pem private key file should not be shared with anyone; it should be known only to the merchant.
 
-## 2.4. Import public certificate to verify the response signature
+### 2.4. Import public certificate to verify the response signature
 
 During  merchant  on-boarding  Pointspay  will  also  share  a  public  certificate  with  the merchant. The merchant can import this certificate in the keystore and use this certificate to verify the response body and signature.
 
@@ -70,227 +70,178 @@ Command to import the public certificate in the merchant’s keystore file:
 
 `keytool -import -trustcacerts -alias <<your alias>> -file <<public certificate file path>>-keystore <<merchant keystore path>>`<br>e.g.<br>`keytool -import -trustcacerts -alias pointspay -file pointspayPublicCertificate.cer -keystore merchant.keystore`
 
+
 ## 3. Payments
-1. Dynamic Pointspay Logo
+
+### 3.1. Dynamic Pointspay Logo
 
 Pointspay uses a dynamic payment logo. Hence, it is necessary to use the Pointspay dynamic logo URL for while displaying Pointspay as a payment method.
 
-**Sample code**: Sandbox:  
+**Sample code**:
 
-<img id=”ppc\_checkout\_btn\_img” alt=”Pointspay” src=”https://uat - secure.pointspay.com/checkout/user/btn-img-v2?shop\_code=njjs8f2aNlqO “> 
+Sandbox:  
 
-<img id=”ppc\_payment\_btn\_img” alt=”FlyingBluePlus” src=”https://uat - secure.pointspay.com/checkout/user/btn-img-v2?shop\_code=5fgs8sdfhqF “> 
+`<img id=”ppc_checkout_btn_img” alt=”Pointspay” src=”https://uat-secure.pointspay.com/checkout/user/btn-img-v2?shop_code=njjs8f2aNlqO“>`
+
+`<img id=”ppc_payment_btn_img” alt=”FlyingBluePlus” src=”https://uat-secure.pointspay.com/checkout/user/btn-img-v2?shop_code=5fgs8sdfhqF“>`
 
 Live:  
 
-<img id=”ppc\_checkout\_btn\_img” alt=”Pointspay” src=”https://secure.pointspay.com/checkout/user/btn-img-v2?shop\_code =5I0OHYlLpGAW “> 
+`<img id=”ppc_checkout_btn_img” alt=”Pointspay” src=”https://secure.pointspay.com/checkout/user/btn-img-v2?shop_code =5I0OHYlLpGAW“>`
 
-<img id=”ppc\_payment\_btn\_img” alt=” FlyingBluePlus “ src=”https://secure.pointspay.com/checkout/user/btn-img-v2?shop\_code =KIJ6JYl0p86N “> 
+`<img id=”ppc_payment_btn_img” alt=”FlyingBluePlus“ src=”https://secure.pointspay.com/checkout/user/btn-img-v2?shop_code =KIJ6JYl0p86N“>`
 
 Pointspay logo URL takes the following parameters:
 
+| **Parameter** | **Mandatory** | **Description** |
+| :- | :- | :- |
+| `shop_code` | Y | - Shop code provided during merchant onboarding.<br>- Max 32 characters. |
+| `language` | N | - Used to display language-specific logo.<br>- 2-character ISO 639-1 language code.<br>- Default language is: en. |
 
+_Table 2_ 
 
-|**Parameter** |**Mandatory** |**Description** |
-| - | - | - |
-|shop\_code|Y |<p>- Shop code provided during merchant onboarding.</p><p>- Max** 32 characters.</p>|
-|language|N |<p>￿  Used to display language-specific </p><p>logo. </p><p>￿ ￿ </p><p>2-character ISO 639-1 language code. Default language is: en.</p>|
-
-Table 2 
-
-2. Payments API
+### 3.2. Payments API
 
 This API will initiate the Pointspay payment and create and persist the transaction details in the Pointspay system. This API returns the Pointspay payment URL and the generated payment id in the response.
 
 The API is secured via OAuth which requires adding OAuth headers and a signature to the request and the response needs to be verified accordingly. Please refer Section 5 below for the details on request-response signatures.
 
+| API URI | /api/v1/payments |
+| :- | :- |
+| HTTP Method | POST |
 
-
-|API URI |/api/v1/payments|
-| - | - |
-|HTTP Method |POST |
-
-Table 3 
+_Table 3_ 
 
 **Request:** 
 
+| **Parameter** | **Type** | **Mandatory** | **Description** |
+| :- | :- | :- | :- |
+| `shop_code` | string | Y | - Shop code provided during merchant onboarding.<br>- Max 32 characters. |
+| `order_id` | string | Y | - The order id created by merchant.<br>- Max 32 characters.<br>- Allowed characters: [0-1A-Za-z]. |
+| `amount` | string | Y | - The payment amount in minor units.<br>- Max 11 characters.<br>- E.g., For a payment amount of USD 100.00, pass value as 10000. |
+| `currency` | string | Y | - The currency must be same as displayed to the shopper as basket currency.<br>- 3-character ISO 4217 currency code. |
+| `language` | string | N | - The language in which the Pointspay payment pages shall be rendered.<br>- 2-character ISO 639-1 language code.<br>- Default language is: en. |
+| `additional_data` | object | N | - An optional additional information can be passed as part of the request.<br>- Please refer section 6. |
 
-
-|**Parameter** |**Type** |**Mandatory** |**Description** |
-| - | - | - | - |
-|shop\_code|string |Y |<p>- Shop code provided during merchant onboarding.</p><p>- Max 32 characters.</p>|
-|order\_id |string |Y |<p>- The order id created by merchant.</p><p>- Max 32 characters. </p><p>- Allowed characters: [0-1A-Za-z]. </p>|
-|amount |string |Y |<p>- The payment amount in minor units. </p><p>- Max 11 characters. </p><p>- E.g., For a payment amount of USD 100.00, pass value as 10000.</p>|
-
-
-
-|currency ||string |Y |￿ |The currency must be same as |
-| - | :- | - | - | - | - |
-||||||displayed to the shopper as basket |
-||||||currency. |
-|||||￿ |3-character ISO 4217 currency code.|
-|language||string |N |￿ |The language in which the Pointspay |
-||||||payment pages shall be rendered.|
-|||||￿ |2-character ISO 639-1 language |
-||||||code. |
-|||||￿ |Default language is: en.|
-|additional\_data||object**  |N |￿ |An optional additional information |
-||||||can be passed as part of the request. |
-|||||￿ |Please refer section 6.|
-
-Table 4 
+_Table 4_
 
 **Response:** 
 
+| **Parameter** | **Type** | **Description** |
+| :- | :- | :- |
+| `created_at` | string | The Epoch time with milliseconds when the payment transaction was created.<br>e.g. 1694068168722 |
+| `href` | string | Payment redirection URL of the Pointspay payment page when the transaction status is ACCEPTED. |
+| `order_id` | string | Order id sent by merchant in the request. |
+| `payment_id` | string | Unique identifier of the payment transaction in Pointspay. |
+| `status` | string | The transaction can be in one of the pre-defined statuses: REJECTED, ACCEPTED or FRAUD. You should redirect a shopper to the Pointspay payment page only when a transaction is in *ACCEPTED* status. |
+| `status_message` | string | A more detailed message about the status. |
 
+_Table 5_
 
-|**Parameter** ||**Type** |**Description** |
-| - | :- | - | - |
-|created\_at||string |The Epoch time with milliseconds when the payment |
-||||transaction was created.|
-||||e.g. 1694068168722|
-|href ||string |Payment redirection URL of the Pointspay payment page |
-||||when the transaction status is ACCEPTED. |
-|order\_id ||string |Order id sent by merchant in the request.|
-|payment\_id||string |Unique identifier of the payment transaction in Pointspay.|
-|status ||string |The transaction can be in one of the pre-defined statuses: |
-||||REJECTED, ACCEPTED or FRAUD. You should redirect a |
-||||shopper to the Pointspay payment page only when a |
-||||transaction is in *ACCEPTED* status. |
-|status\_message||string |A more detailed message about the status.|
-
-Table 5 
-
-3. Redirect shopper to the Pointspay payment application
+### 3.3. Redirect shopper to the Pointspay payment application
 
 Pointspay returns a redirection URI in the response of the Payment API in the href field (Refer Table 5). Before redirecting the shopper to the Pointspay payment application though, the merchant should verify the following points: 
 
 - The payment response status is ACCEPTED.
 - The order id in the payment response matches the order on your end.
-4. Pointspay redirection back to the merchant web shop
+
+### 3.4. Pointspay redirection back to the merchant web shop
 
 Once the payment is successful, the shopper would be redirected back to your web shop via the return URL specified by you during merchant onboarding, or the dynamic URLs specified in the payment request. 
 
 You need to provide 3 redirect URLs during onboarding: 
 
 1. **Success link:** The URL to which the shopper would be redirected when the payment is successful.
-1. **Cancel link:** The URL to which the shopper would be redirected if he decides to pay with another payment option.
-1. **Failure link:** The URL to which the shopper would be redirected when the payment fails.
+2. **Cancel link:** The URL to which the shopper would be redirected if he decides to pay with another payment option.
+3. **Failure link:** The URL to which the shopper would be redirected when the payment fails.
 
 All these links can be the same, depending on your application logic. They will all have the following request body parameters submitted by Pointspay while redirection, Pointspay will do HTTP POST form submission and will send the following parameters while redirecting.
 
+| **Parameter** | **Description** |
+| :- | :- |
+| `order_id` | Order number supplied by you in the payment request. |
+| `payment_id` | Unique identifier of the payment which is generated by Pointspay. You use this identifier to specify a Payment, when doing refunds.<br>E.g., 2f47fff25b3e4e7dabe7d8ff8a1a0010 |
+| `status` | Status code indicating the status of the request. Few possible status: SUCCESS, FAILED, CANCELED. |
+| `authorization` | The authorization code associated with the payment processed. |
+| `oauth_signature` | The generated signature, which is unique for each request and ensures the request’s integrity. |
 
-
-|**Parameter** ||**Description** |
-| - | :- | - |
-|order\_id ||Order number supplied by you in the payment request. |
-|||Unique identifier of the payment which is generated by |
-|payment\_id||Pointspay. You use this identifier to specify a Payment, when doing refunds.|
-|||E.g., 2f47fff25b3e4e7dabe7d8ff8a1a0010|
-|status ||Status code indicating the status of the request. Few possible status: SUCCESS, FAILED, CANCELED. |
-|authorization||The authorization code associated with the payment processed.|
-|oauth\_signature||The generated signature, which is unique for each request |
-|||and ensures the request’s integrity.|
-
-Table 6 
+_Table 6_ 
 
 Merchant should verify the form body parameters and auth signature sent while redirection. The steps to do the same are mentioned in the section 5.3 below. 
 
 **Sample link** 
 
-[https://www.example.com/txn_landing_page (merchant re](https://www.example.com/txn_landing_page)direction URL) 
+[https://www.example.com/txn_landing_page](https://www.example.com/txn_landing_page) (merchant redirection URL) 
 
+**Sample redirection request body**
+```
+"order_id": "e97f-45aa-9c6d-1f95",
+"payment_id": "eb51e9bb9d2c4166b3b5332273bdff1d",
+"status": "SUCCESS",
+"authorization": "Bj05vcff67cSHA256withRSA550e8400-e29b-41d4-a716-4466554400001693982469",
+"oauth_signature": "dUkcasiWsc00rM5EdctWfvEst+w6tbSgckLDOeC4H3E="
+```
 
-
-|**Sample redirection request body**|
-| - |
-|"order\_id ": "e97f-45aa-9c6d-1f95", |
-|"payment\_id ": "eb51e9bb9d2c4166b3b5332273bdff1d", |
-|"status ": "SUCCESS", |
-|"authorization": "Bj05vcff67cSHA256withRSA550e8400-e29b-41d4-a716 -|
-|4466554400001693982469", |
-|“oauth\_signature”:"dUkcasiWsc00rM5EdctWfvEst+w6tbSgckLDOeC4H3E="|
-
-5. Instant Payment Notification (IPN)
+### 3.5. Instant Payment Notification (IPN)
 
 After the payment has been processed successfully at Pointspay, the Pointspay server sends an HTTP PUT request with parameters to a pre-configured merchant IPN endpoint. If an IPN endpoint URL is specified in the payment request, the Pointspay server sends the notification to that provided endpoint URL. Refer section 6.1 on how to pass the dynamic IPN URL in the payment request. 
 
 **Merchant endpoint pre-requisites:** 
 
 - Merchant endpoint should be accessible in both HTTP and HTTPS schemes.
-- Merchant endpoint character length should not be greater than 1000 characters. Merchant endpoint should be able to accept a header size up to 8kb. Pointspay will send 
+- Merchant endpoint character length should not be greater than 1000 characters.
 
-the following parameters to the merchant endpoint:
+Merchant endpoint should be able to accept a header size up to 8kb. Pointspay will send the following parameters to the merchant endpoint:
 
+| **Parameter** | **Description** |
+| :- | :- |
+| `order_id` | Order number supplied by you in the payment request. |
+| `payment_id` | Unique identifier of the payment which is generated by Pointspay. You use this identifier to specify a payment, when doing refunds.<br>E.g., 2f47fff25b3e4e7dabe7d8ff8a1a0010 |
+| `status` | Status code indicating the status of the request.<br>Possible status: SUCCESS. |
 
-
-|**Parameter**  |**Description** |
-| - | - |
-|order\_id |Order number supplied by you in the payment request. |
-|payment\_id|<p>Unique identifier of the payment which is generated by Pointspay. You use this identifier to specify a payment, when doing refunds.</p><p>E.g., 2f47fff25b3e4e7dabe7d8ff8a1a0010</p>|
-|status |Status code indicating the status of the request. Possible status: SUCCESS.  |
-
-Table 7
+_Table 7_
 
 Pointspay also sends an OAuth authorization header with the request. Merchant should verify the request body and signature sent in the request header. The steps to verify the signature are available in section 5.2 below. 
 
-4. Refund API 
+
+## 4. Refund API 
 
 You can request a partial or full refund. You can request several partial refunds for the same transaction. The sum of all refunds must not be higher than the total amount of the payment transaction. 
 
 The API is secured via OAuth which requires adding OAuth headers and a signature to the request and the response needs to be verified accordingly. Please refer Section 5 below for the details on request-response signatures.
 
+| API URI | /api/v1/refunds |
+| :- | :- |
+| HTTP Method |POST |
 
-
-|API URI |/api/v1/refunds |
-| - | - |
-|HTTP Method |POST |
-
-Table 8
+_Table 8_
 
 **Request:** 
 
+| **Parameter** | **Type** | **Mandatory** | **Description** |
+| :- | :- | :- | :- |
+| `amount` | string | Y | - Refund amount in minor units.<br>- Max 11 characters.<br>- E.g., For a refund amount of USD100.00, pass value as 10000. |
+| `payment_id` | string | Y | The Pointspay payment id provided when the payment was initially created. |
+| `refund_reason` | string | N | - Reason for refund of the payment.<br>- Max 200 characters. |
+| `additional_data` | object | N | Here optional additional information can be passed as part of the request.<br>Please refer section 6. |
 
-
-|**Parameter** |**Type** |**Mandatory** |**Description** |
-| - | - | - | - |
-|amount |string |Y |<p>- Refund amount in minor units</p><p>- Max 11 characters</p>|
-|||||￿  E.g., For a refund amount of USD |
-| :- | :- | :- | :- | - |
-|||||100\.00, pass value as 10000.|
-|payment\_id||string |Y |The Pointspay payment id provided |
-|||||when the payment was initially |
-|||||created.|
-|refund\_reason||string |N |￿  Reason for refund of the |
-|||||payment.|
-|||||￿  Max 200 characters.|
-|additional\_data||object |N |Here optional additional |
-|||||information can be passed as part |
-|||||of the request.|
-||||||
-|||||Please refer section 6.|
-
-Table 9
+_Table 9_
 
 **Response:** 
 
+| **Parameter** | **Type** | **Description** |
+| :- | :- | :- |
+| `created_at` | string | The Epoch time with milliseconds when the refund transaction was created.<br>e.g., 1694068168722 |
+| `payment_id` | string | Unique identifier of the payment transaction in Pointspay. |
+| `refund_amount` | string | Amount refunded in the current refund transaction. |
+| `refund_id` | string | Unique identifier of the refund transaction in Pointspay. |
+| `status` | string | Transaction can be in one of the predefined statuses: SUCCESS, FAILED, REJECTED. |
+| `status_message` | string | A more detailed message about the status. |
+
+_Table 10_
 
 
-|**Parameter** ||**Type** |**Description** |
-| - | :- | - | - |
-|created\_at||string |The Epoch time with milliseconds when the refund |
-||||transaction was created. |
-||||e.g., 1694068168722|
-|payment\_id ||string |Unique identifier of the payment transaction in Pointspay. |
-|refund\_amount||string |Amount refunded in the current refund transaction.|
-|refund\_id ||string |Unique identifier of the refund transaction in Pointspay.|
-|status ||string |Transaction can be in one of the predefined statuses: |
-||||SUCCESS, FAILED, REJECTED. |
-|status\_message||string |A more detailed message about the status.|
-
-Table 10
-
-5. Request/Response signature creation and verification 
+## 5. Request/Response signature creation and verification 
 1. Add Authorization Header and Signature in the request
 
 The request needs to be signed using a digital certificate. Steps to generate the signature:
