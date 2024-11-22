@@ -1,29 +1,28 @@
-﻿![ref1]
+![image](https://github.com/user-attachments/assets/aff9c589-000d-4898-bc1e-11d67e1ed574)
 
-**Pointspay ![ref1]**
+# **Pointspay**
 
 REST API Reference 
 
-1. Introduction
+## 1. Introduction
 
-The target audience of this document is Online Merchants who intend to offer Pointspay as an Alternative Payment Method in their checkout process. The purpose of this document is to guide merchant and partner integrations with the Pointspay REST API. 
-
-2. Overview 
-
-The Pointspay APIs are organized around REST principles. Data objects are represented in JSON.  
-
-1. Environments
-
-Live and sandbox environments are available. The endpoints for the two environments are as below: 
+The target audience of this document is Online Merchants who intend to offer Pointspay as an Alternative Payment Method in their checkout process. The purpose of this document is to guide merchant and partner integrations with the Pointspay REST API.
 
 
+## 2. Overview
+
+The Pointspay APIs are organized around REST principles. Data objects are represented in JSON.
+
+### 2.1. Environments
+
+Live and sandbox environments are available. The endpoints for the two environments are as below:
 
 |**Environment** |**Endpoint** |
 | - | - |
 |Sandbox |https://uat-secure.pointspay.com|
 |Live |https://secure.pointspay.com|
 
-Table 1 
+_Table 1_
 
 You can use your sandbox  credentials for authentication on the sandbox endpoint. All transactions made on the sandbox endpoint do not reach live payment networks and program providers. Once you are ready to move to the live environment you can update the endpoint to the live environment 
 
@@ -31,58 +30,47 @@ Endpoint URI: is created by appending the API URI to the environment-specific en
 
 e.g., https://secure.pointspay.com/api/v1/payments 
 
-2. OAuth Security
+### 2.2. OAuth Security
 
-The API’s will be secured with OAuth 1.0a. OAuth is a protocol originally published in the [RFC-5489 an](https://datatracker.ietf.org/doc/html/rfc5849)d used for securing access to API.
+The API’s will be secured with OAuth 1.0a. OAuth is a protocol originally published in the [RFC-5489](https://datatracker.ietf.org/doc/html/rfc5849) and used for securing access to API.
 
 We would be using OAuth 1.0a in its simplest form. This implementation involves one single step, in which we rely on OAuth signatures for server-to-server authentication.
 
-![](Aspose.Words.351fea9e-b96b-4879-aff2-f879a5a7dd8e.002.jpeg)
+![image](https://github.com/user-attachments/assets/e9a90364-95a0-4ec1-a046-e102a6b74a62)
 
-3. Generate certificates to digitally sign the transaction
+### 2.3. Generate certificates to digitally sign the transaction
 
 Follow the below process to generate the keypair to sign the transaction request digitally.
 
 - Generate a private-public key pair and obtain a certificate corresponding to the public certificate. We recommend using an 8192-bit key to accommodate the payload size.
 - The certificate can be either self-signed or signed by a Certificate Authority (CA). Commands for self-signed certificate generation using openssl command:
 
-
-
 |**Open SSL Commands**|
 | - |
-|<p>-- Generate private certificate </p><p>openssl req -newkey rsa:8192 -nodes -keyout key.pem -x509 -days 1095 -out certificate.cer **-**sha256** </p>|
+|-- Generate private certificate<br>`openssl req -newkey rsa:8192 -nodes -keyout key.pem -x509 -days 1095 -out certificate.cer -sha256`|
 
-`  `Alternatively, the below Java keytool command can be also used:
-
-
+Alternatively, the below Java keytool command can be also used:
 
 |**Generate a private/public key pair**|
 | - |
-|<p>keytool -genkeypair -alias  <<your alias>>  -keys -keyalg RSA -keysize 8192 -dname </p><p>"CN=<<Name>>" -validity 1095 -storetype PKCS12 -keystore <<KeyStore Name>> -storepass  <<your password>> </p><p>e.g. </p><p>keytool -genkeypair -alias prod-merchant-signature-keys -keyalg RSA -keysize 8192 -dname </p><p>“CN=prod-merchant” -validity 1095 -storetype PKCS12 -keystore prod-merchant-signature- keys.p12  -storepass 12345 </p>|
-
-
+|`keytool -genkeypair -alias  <<your alias>>  -keys -keyalg RSA -keysize 8192 -dname "CN=<<Name>>" -validity 1095 -storetype PKCS12 -keystore <<KeyStore Name>> -storepass  <<your password>>`<br>e.g.<br>`keytool -genkeypair -alias prod-merchant-signature-keys -keyalg RSA -keysize 8192 -dname </p><p>“CN=prod-merchant” -validity 1095 -storetype PKCS12 -keystore prod-merchant-signature- keys.p12  -storepass 12345`|
 
 |**Export the public certificate from a p12/pfx file**|
 | - |
-|<p>keytool -exportcert -alias <<your alias>>  -keys -storetype PKCS12 -keystore <<your alias >>.p12 -</p><p>file <<CertificateName>>.cer -rfc -storepass <<your password>> </p><p>e.g. </p><p>keytool -exportcert -alias prod-merchant-signature-keys -storetype PKCS12 -keystore prod-</p><p>merchant-signature-keys.p12 -file prod-merchant-public-certificate.cer -rfc -storepass 12345** </p>|
+|`keytool -exportcert -alias <<your alias>>  -keys -storetype PKCS12 -keystore <<your alias >>.p12 -file <<CertificateName>>.cer -rfc -storepass <<your password>>`<br>e.g.<br>`keytool -exportcert -alias prod-merchant-signature-keys -storetype PKCS12 -keystore prod-merchant-signature-keys.p12 -file prod-merchant-public-certificate.cer -rfc -storepass 12345`|
 
+1. Share the public certificate (.cer) file with Pointspay which will be added in the trust store at Pointspay side.
+2. The pem private key file should not be shared with anyone; it should be known only to the merchant.
 
-
-1. Share the public certificate (.cer) file with Pointspay which will be added in the trust store at Pointspay side. 
-1. The  pem private key file should not be shared with anyone; it should be known only to the merchant. 
-4. Import public certificate to verify the response signature.
+## 2.4. Import public certificate to verify the response signature
 
 During  merchant  on-boarding  Pointspay  will  also  share  a  public  certificate  with  the merchant. The merchant can import this certificate in the keystore and use this certificate to verify the response body and signature.
 
 Command to import the public certificate in the merchant’s keystore file: 
 
-keytool -import -trustcacerts -alias <<your alias>> -file <<public certificate file path>>-keystore ![](Aspose.Words.351fea9e-b96b-4879-aff2-f879a5a7dd8e.003.png)<<merchant keystore path>> 
+`keytool -import -trustcacerts -alias <<your alias>> -file <<public certificate file path>>-keystore <<merchant keystore path>>`<br>e.g.<br>`keytool -import -trustcacerts -alias pointspay -file pointspayPublicCertificate.cer -keystore merchant.keystore`
 
-e.g. 
-
-keytool -import -trustcacerts -alias pointspay -file pointspayPublicCertificate.cer -keystore merchant.keystore 
-
-3. Payments
+## 3. Payments
 1. Dynamic Pointspay Logo
 
 Pointspay uses a dynamic payment logo. Hence, it is necessary to use the Pointspay dynamic logo URL for while displaying Pointspay as a payment method.
