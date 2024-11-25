@@ -42,7 +42,9 @@ We would be using OAuth 1.0a in its simplest form. This implementation involves 
 Follow the below process to generate the keypair to sign the transaction request digitally.
 
 - Generate a private-public key pair and obtain a certificate corresponding to the public certificate. We recommend using an 8192-bit key to accommodate the payload size.
-- The certificate can be either self-signed or signed by a Certificate Authority (CA). Commands for self-signed certificate generation using openssl command:
+- The certificate can be either self-signed or signed by a Certificate Authority (CA).
+
+Commands for self-signed certificate generation using openssl command:
 
 | Open SSL Commands                                                                                                                      |
 |:---------------------------------------------------------------------------------------------------------------------------------------|
@@ -356,6 +358,7 @@ String generateSignature(String body, Path storePath, String alias, char[] keyst
     try(FileInputStream fis = new FileInputStream (storePath.toFile())) {
         // Load the keystore and get private key by providing keystore password
         keystore.load(fis, keystorePassword);
+
         // Set entry password
         KeyStore.ProtectionParameter entryPassword =
                 new KeyStore.PasswordProtection(keyPassword);
@@ -541,10 +544,10 @@ boolean verifySignature(String messageToBeVerified, String oauthSignature, Path 
 
 This section contains details of additional information, Merchant may or may not send during payment.
 
-| Parameter    | Type         | Mandatory | Description       |
-|:-------------|:-------------|:----------|:------------------|
-| dynamic_urls | object       | N         | Refer Section 6.1 |
-| categories   | List<object> | N         | Refer Section 6.2 |
+| Parameter    | Type           | Mandatory | Description       |
+|:-------------|:---------------|:----------|:------------------|
+| dynamic_urls | object         | N         | Refer Section 6.1 |
+| categories   | List\<object\> | N         | Refer Section 6.2 |
 
 _Table 13_
 
