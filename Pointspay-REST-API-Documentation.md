@@ -31,7 +31,7 @@ e.g., https://secure.pointspay.com/api/v1/payments
 
 ### 2.2. OAuth Security
 
-The API’s will be secured with OAuth 1.0a. OAuth is a protocol originally published in the [RFC-5489](https://datatracker.ietf.org/doc/html/rfc5849) and used for securing access to API.
+The API’s will be secured with OAuth 1.0a. OAuth is a protocol originally published in the [RFC-5849](https://datatracker.ietf.org/doc/html/rfc5849) and used for securing access to API.
 
 We would be using OAuth 1.0a in its simplest form. This implementation involves one single step, in which we rely on OAuth signatures for server-to-server authentication.
 
@@ -121,8 +121,8 @@ _Table 3_
 | Parameter       | Type   | Mandatory | Description                                                                                                                                    |
 |:----------------|:-------|:----------|:-----------------------------------------------------------------------------------------------------------------------------------------------|
 | shop_code       | string | Y         | - Shop code provided during merchant onboarding.<br>- Max 32 characters.                                                                       |
-| order_id        | string | Y         | - The order id created by merchant.<br>- Max 32 characters.<br>- Allowed characters: [0-1A-Za-z].                                              |
-| amount          | string | Y         | - The payment amount in minor units.<br>- Max 11 characters.<br>- E.g., For a payment amount of USD 100.00, pass value as 10000.               |
+| order_id        | string | Y         | - The order id created by merchant.<br>- Max 32 characters.<br>- Allowed characters: [0-9A-Za-z].                                              |
+| amount          | string | Y         | - The payment amount in minor units.<br>- Max 10 characters.<br>- E.g., For a payment amount of USD 100.00, pass value as 10000.               |
 | currency        | string | Y         | - The currency must be same as displayed to the shopper as basket currency.<br>- 3-character ISO 4217 currency code.                           |
 | language        | string | N         | - The language in which the Pointspay payment pages shall be rendered.<br>- 2-character ISO 639-1 language code.<br>- Default language is: en. |
 | additional_data | object | N         | - An optional additional information can be passed as part of the request.<br>- Please refer section 6.                                        |
@@ -222,12 +222,12 @@ _Table 8_
 
 **Request:**
 
-| Parameter       | Type   | Mandatory | Description                                                                                                               |
-|:----------------|:-------|:----------|:--------------------------------------------------------------------------------------------------------------------------|
-| amount          | string | Y         | - Refund amount in minor units.<br>- Max 11 characters.<br>- E.g., For a refund amount of USD100.00, pass value as 10000. |
-| payment_id      | string | Y         | The Pointspay payment id provided when the payment was initially created.                                                 |
-| refund_reason   | string | N         | - Reason for refund of the payment.<br>- Max 200 characters.                                                              |
-| additional_data | object | N         | Here optional additional information can be passed as part of the request.<br>Please refer section 6.                     |
+| Parameter       | Type   | Mandatory | Description                                                                                                                |
+|:----------------|:-------|:----------|:---------------------------------------------------------------------------------------------------------------------------|
+| amount          | string | Y         | - Refund amount in minor units.<br>- Max 10 characters.<br>- E.g., For a refund amount of USD 100.00, pass value as 10000. |
+| payment_id      | string | Y         | The Pointspay payment id provided when the payment was initially created.                                                  |
+| refund_reason   | string | N         | - Reason for refund of the payment.<br>- Max 200 characters.                                                               |
+| additional_data | object | N         | Here optional additional information can be passed as part of the request.<br>Please refer section 6.                      |
 
 _Table 9_
 
@@ -557,12 +557,12 @@ You can set up default static URLs for your shop during onboarding or can includ
 
 If you haven't set the default success, failure and cancel redirect URLs during on-boarding and you are also not sending corresponding dynamic redirection URLs during the payment request, you will get an error (REDIRECT_URL_MISSING) while creating a transaction. Please refer the section 7.2 for more details.
 
-| Parameter | Type   | Mandatory | Description                                                                                                                                    |
-|:----------|:-------|:----------|:-----------------------------------------------------------------------------------------------------------------------------------------------|
-| success   | string | N         | - The URL to which the shopper would be redirected when the payment is successful.<br>- 200 characters maximum.                                |
-| failure   | string | N         | - The URL to which the shopper would be redirected when the payment fails.<br>- 200 characters maximum.                                        |
-| cancel    | string | N         | - The URL to which the shopper would be redirected when the payment is cancelled by the user.<br>- 200 characters maximum.                     |
-| ipn       | string | N         | - A merchant endpoint URL to which a notification will be sent after a successful payment.<br>- 200 characters maximum.<br>- Refer Section 3.5 |
+| Parameter | Type   | Mandatory | Description                                                                                                                                     |
+|:----------|:-------|:----------|:------------------------------------------------------------------------------------------------------------------------------------------------|
+| success   | string | N         | - The URL to which the shopper would be redirected when the payment is successful.<br>- 1000 characters maximum.                                |
+| failure   | string | N         | - The URL to which the shopper would be redirected when the payment fails.<br>- 1000 characters maximum.                                        |
+| cancel    | string | N         | - The URL to which the shopper would be redirected when the payment is cancelled by the user.<br>- 1000 characters maximum.                     |
+| ipn       | string | N         | - A merchant endpoint URL to which a notification will be sent after a successful payment.<br>- 1000 characters maximum.<br>- Refer Section 3.5 |
 
 _Table 14_
 
@@ -572,7 +572,7 @@ It is the list of product categories with amount per category.
 
 | Parameter | Type   | Mandatory | Description                                                                                                                                 |
 |:----------|:-------|:----------|:--------------------------------------------------------------------------------------------------------------------------------------------|
-| amount    | string | N         | - The category-specific amount in minor units.<br>- Max 11 characters.<br>- E.g., For a category amount of USD 100.00, pass value as 10000. |
+| amount    | string | N         | - The category-specific amount in minor units.<br>- Max 10 characters.<br>- E.g., For a category amount of USD 100.00, pass value as 10000. |
 | code      | string | N         | - It is the category code. It should be unique for each category.                                                                           |
 
 _Table 15_
@@ -630,8 +630,8 @@ _Table 17_
 
 ### 7.3. Sample error format
 
-| Sample Error Body                                                                                      |
-|:-------------------------------------------------------------------------------------------------------|
-| `{"code": "INVALID_PAYMENT_ID", "message": "Payment ID does not exist.", "key": "INVALID_PAYMENT_ID"}` |
+| Sample Error Body                                                                                                                                                  |
+|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `{"code": "TRANSACTION_NOT_FOUND", "message": "Payment with the provided ID was not found. Please check if Payment ID is valid.", "key": "TRANSACTION_NOT_FOUND"}` |
 
 _Table 18_
