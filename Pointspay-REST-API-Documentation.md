@@ -548,6 +548,7 @@ This section contains details of additional information, Merchant may or may not
 |:-------------|:---------------|:----------|:------------------|
 | dynamic_urls | object         | N         | Refer Section 6.1 |
 | categories   | List\<object\> | N         | Refer Section 6.2 |
+| custom_data  | Map\<String, object\> | N         | Refer Section 6.3 |
 
 _Table 13_
 
@@ -576,6 +577,18 @@ It is the list of product categories with amount per category.
 | code      | string | N         | - It is the category code. It should be unique for each category.                                                                           |
 
 _Table 15_
+
+### 6.3. Custom Data
+When you need to customize payment and pass additional raw json data you should used this filed. The real example is Transavia integration where we use _custom_data_ to pass additional payment attributes to a transaction in order to pass them to Adyen payment later.
+The JSON mean to be a generic object like
+```json
+{
+  "key": "value",
+  "obj2": {
+    "key2": "value2"
+  }
+}
+```
 
 ## 7. Metadata
 
