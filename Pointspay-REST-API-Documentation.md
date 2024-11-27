@@ -81,7 +81,7 @@ Pointspay uses a dynamic payment logo. Hence, it is necessary to use the Pointsp
 
 Sandbox:
 
-```
+```html
 <img id=”ppc_checkout_btn_img” alt=”Pointspay” src=”https://uat-secure.pointspay.com/checkout/user/btn-img-v2?shop_code=njjs8f2aNlqO”>
 
 <img id=”ppc_payment_btn_img” alt=”FlyingBluePlus” src=”https://uat-secure.pointspay.com/checkout/user/btn-img-v2?shop_code=5fgs8sdfhqF”>
@@ -89,7 +89,7 @@ Sandbox:
 
 Live:
 
-```
+```html
 <img id=”ppc_checkout_btn_img” alt=”Pointspay” src=”https://secure.pointspay.com/checkout/user/btn-img-v2?shop_code=5I0OHYlLpGAW”>
 
 <img id=”ppc_payment_btn_img” alt=”FlyingBluePlus” src=”https://secure.pointspay.com/checkout/user/btn-img-v2?shop_code=KIJ6JYl0p86N”>
@@ -179,7 +179,7 @@ Merchant should verify the form body parameters and auth signature sent while re
 
 **Sample redirection request body**
 
-```
+```json
 "order_id": "e97f-45aa-9c6d-1f95",
 "payment_id": "eb51e9bb9d2c4166b3b5332273bdff1d",
 "status": "SUCCESS",
@@ -286,7 +286,7 @@ e.g.
 
 **Sample Payment Request Header**
 
-```
+```json
 POST /api/v1/payments HTTP/1.1
 Host: https://secure.pointspay.com
 Content-type: application/json
@@ -300,13 +300,13 @@ Authorization: Oauth
 
 **Sample Payment Body**
 
-```
+```json
 {“amount”:”10000”,”currency”:”USD”,”language”:”en”,”order_id”:”e97f-45aa-9c6d-1f95”,”shop_code”:”O7iY1ZMoTwFQ”}
 ```
 
 **Sample Payment Message to generate signature**
 
-```
+```json
 {“amount”:”10000”,”currency”:”USD”,”language”:”en”,”order_id”:”e97f-45aa-9c6d-1f95”,”shop_code”:”O7iY1ZMoTwFQ”}Bj05vcff67cSHA256withRSA550e8400-e29b-41d4-a716-4466554400001693982469
 ```
 
@@ -314,7 +314,7 @@ Authorization: Oauth
 
 Code to generate alphabetically ordered JSON body and to append the authorization header parameter to generate signature message:
 
-```
+```java
 String sortAndMinifyBody(String body) throws JsonProcessingException {
     ObjectMapper mapper = new ObjectMapper();
     TypeReference<TreeMap<String, Object>> typeRef
@@ -345,7 +345,7 @@ String appendOauthHeaderParams(String orderedAndMinifiedBody) {
 
 Sample code to generate the OAuth signature:
 
-```
+```java
 String generateSignature(String body, Path storePath, String alias, char[] keystorePassword, char[] keyPassword) throws Exception {
     // Generating an alphabetically sorted and minified json request body string from java object
     String orderedAndMinifiedBody = sortAndMinifyBody(body);
@@ -398,7 +398,7 @@ Pointspay returns the OAuth authorization parameters in the API response header.
 
 Code to append the authorization header parameter to generate message to be verified:
 
-```
+```java
 String sortAndMinifyBody(String body) throws JsonProcessingException {
     ObjectMapper mapper = new ObjectMapper();
     TypeReference<TreeMap<String, Object>> typeRef
@@ -429,7 +429,7 @@ String appendOauthHeaderParams(String orderedAndMinifiedBody) {
 
 Sample code to verify the OAuth signature:
 
-```
+```java
 boolean verifySignature(String body, String oauthSignature, Path storePath, String alias, char[] keystorePassword, char[] keyPassword) throws Exception {
     // Generating am alphabetically sorted and minified json response body string from java object
     String orderdAndMinifiedBody = sortAndMinifyBody(body);
@@ -472,7 +472,7 @@ The merchant should verify the request body parameters with the signature.
 
 **Sample redirection request body**
 
-```
+```json
 "order_id": "e97f-45aa-9c6d-1f95",
 "payment_id": "eb51e9bb9d2c4166b3b5332273bdff1d",
 "status": "SUCCESS",
@@ -494,7 +494,7 @@ Refer below Java code sample below to verify the request param and signature.
 
 Append values from the request body param to create the message to be verified.
 
-```
+```java
 String createMessageToBeVerified() {
     String orderId = "Read order_id parameter from the redirect request param";
     String paymentId = "Read payment_id parameter from the redirect request param";
@@ -506,7 +506,7 @@ String createMessageToBeVerified() {
 
 Sample code to verify the message with signature:
 
-```
+```java
 boolean verifySignature(String messageToBeVerified, String oauthSignature, Path storePath, String alias, char[] keystorePassword, char[] keyPassword) throws Exception {
     // Get the signature header from the request
     byte[] signatureBytes = Base64.getDecoder().decode(oauthSignature);
