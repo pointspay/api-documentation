@@ -121,7 +121,7 @@ _Table 3_
 | Parameter       | Type   | Mandatory | Description                                                                                                                                    |
 |:----------------|:-------|:----------|:-----------------------------------------------------------------------------------------------------------------------------------------------|
 | shop_code       | string | Y         | - Shop code provided during merchant onboarding.<br>- Max 32 characters.                                                                       |
-| order_id        | string | Y         | - The order id created by merchant.<br>- Max 32 characters.<br>- Allowed characters: [0-9A-Za-z].                                              |
+| order_id        | string | Y         | - The order id created by merchant.<br>- Max 64 characters.<br>- Allowed characters: [0-9A-Za-z].                                              |
 | amount          | string | Y         | - The payment amount in minor units.<br>- Max 10 characters.<br>- E.g., For a payment amount of USD 100.00, pass value as 10000.               |
 | currency        | string | Y         | - The currency must be same as displayed to the shopper as basket currency.<br>- 3-character ISO 4217 currency code.                           |
 | language        | string | N         | - The language in which the Pointspay payment pages shall be rendered.<br>- 2-character ISO 639-1 language code.<br>- Default language is: en. |
