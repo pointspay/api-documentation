@@ -32,7 +32,7 @@ Navigate to Pointspay payment method via Magento Admin -> Stores -> Settings -> 
 
 www.pointspay.com
 
-![](../output_images/PointspayMagentoPluginInstallationGuideImages/Magento Plugin Installation Guide2.jpeg)
+![](../output_images/PointspayMagentoPluginInstallationGuideImages/MagentoPluginInstallationImage2.png)
 
  
 
@@ -40,7 +40,7 @@ www.pointspay.com
 
 The plugin comes pre-packaged with Pointspay as the default payment method. Additional variants (Flying Blue+ for instance) can be added on the fly by synchronizing the plugin against the Pointspay server. New variants that are added on the Pointspay platform from time to time can hence be added and enabled for the web shop without additional plugin installations. 
 
-![](../output_images/PointspayMagentoPluginInstallationGuideImages/Magento Plugin Installation Guide3.jpeg)
+![](../output_images/PointspayMagentoPluginInstallationGuideImages/MagentoPluginInstallationImage3.png)
 
 
 
@@ -57,7 +57,7 @@ The plugin comes pre-packaged with Pointspay as the default payment method. Addi
 
 Configure the following basic settings for every Pointspay payment method variant that should be enabled. 
 
-![](../output_images/PointspayMagentoPluginInstallationGuideImages/Magento Plugin Installation Guide4.jpeg)
+![](../output_images/PointspayMagentoPluginInstallationGuideImages/MagentoPluginInstallationImage4.png)
 
 
 
@@ -83,11 +83,11 @@ Configure the following access settings for every Pointspay payment method varia
 
 **Note:** Always configure access settings in “Website scope”. 
 
-![](../output_images/PointspayMagentoPluginInstallationGuideImages/Magento Plugin Installation Guide5.jpeg)
+![](../output_images/PointspayMagentoPluginInstallationGuideImages/MagentoPluginInstallationImage5.png)
 
 
 
-![](../output_images/PointspayMagentoPluginInstallationGuideImages/Magento Plugin Installation Guide6.jpeg)
+![](../output_images/PointspayMagentoPluginInstallationGuideImages/MagentoPluginInstallationImage6.png)
 
 
 
@@ -102,7 +102,7 @@ Configure the following access settings for every Pointspay payment method varia
 
 **Note:** Please flush the Cache Storage every time the configuration settings are saved. 
 
-![](../output_images/PointspayMagentoPluginInstallationGuideImages/Magento Plugin Installation Guide7.jpeg)
+![](../output_images/PointspayMagentoPluginInstallationGuideImages/MagentoPluginInstallationImage7.png)
 
 
 
@@ -115,8 +115,8 @@ Pointspay Refunds are integrated with Magento’s Online Refund feature under Cr
 1. In case of partial refunds, click the “Update Totals” for recalculation. 
 1. Click on “Refund” to initiate full or partial refund. 
 
-![](../output_images/PointspayMagentoPluginInstallationGuideImages/Magento Plugin Installation Guide8.jpeg)
+![](../output_images/PointspayMagentoPluginInstallationGuideImages/MagentoPluginInstallationImage8.png)
 
 www.pointspay.com 
 
-![](../output_images/PointspayMagentoPluginInstallationGuideImages/Magento Plugin Installation Guide1.png)
+![](../output_images/PointspayMagentoPluginInstallationGuideImages/MagentoPluginInstallationImage1.png)

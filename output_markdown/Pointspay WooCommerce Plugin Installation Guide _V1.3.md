@@ -1,4 +1,4 @@
-﻿![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationGuide1.png)
+﻿![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationImage1.png)
 
 **Pointspay** 
 
@@ -20,7 +20,7 @@ The Pointspay Woocommerce  plugin is compatible with WordPress Version: 4.0 and 
 
 **Automatic installation** 
 
-![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationGuide2.png)
+![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationImage2.png)
 
 Automatic installation is the easiest option as WordPress handles the file transfers itself and you don’t need to leave your web browser. To do an automatic install of our plugin, log in to your WordPress dashboard, navigate to the **Plugins** menu and click **Add New**. You will see Add Plugins screen. 
 
@@ -28,7 +28,7 @@ In the search field type “PointsPay for WooCommerce”. Once you’ve found ou
 
 **Manual installation** 
 
-![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationGuide3.jpeg)
+![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationImage3.png)
 
 For installing the plugin manually, you have two options: 
 
@@ -37,7 +37,7 @@ For installing the plugin manually, you have two options:
 
 **Plugin activation** 
 
-![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationGuide4.jpeg)
+![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationImage4.png)
 
 Once the plugin is installed, you can activate the plugin by clicking on **Activate** link below the plugin name, in *Plugins* listing. 
 
@@ -57,7 +57,7 @@ Please note that only one version of the available variants of Pointspay can be 
 
 Please note the below example relates to configuring Flying Blue+ 
 
-Basic Settings relate to usability and display configuration of the payment gateway. The options under Basic Settings are as below: ![](Aspose.Words.b5e5bdd3-1b5e-4308-b74a-50b0dd87bc06.005.jpeg)
+Basic Settings relate to usability and display configuration of the payment gateway. The options under Basic Settings are as below: ![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationImage5.png)
 
 1. **Enable / Disable –** Use this option to enable or disable PointsPay Payment Gateway on your WooCommerce store. 
 1. **Test Mode** – Enable this option if you want to test the payment gateway without charging any amount to the customers. Remember that orders will still be placed, so use this method only on your test/staging site, and not on live/production site. If you enable Test Mode, remember to use test credentials in *Access Settings* fields. 
@@ -102,7 +102,7 @@ You can change the order of payment methods on Checkout Page by changing their o
 
 **Payments** tab under **WooCommerce > Settings**. 
 
-![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationGuide7.jpeg)
+![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationImage6.png)
 
 You can click *Up* and *Down* arrows to move the payment methods above or below another  payment method. Alternatively,  you can  drag  and  drop  the  payment method at any position after grabbing it by the list icon on the left.
 
@@ -112,7 +112,7 @@ Once  you’ve  arranged  the  payment  methods  in  desired  order,  click  on 
 
 In case you are facing any issues with the plugin, you would want to contact our support  team  for help. In such cases, you should submit log files along with your support request. Log  files  are generated for the plugin on daily basis, and can be 
 
-![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationGuide8.png)
+![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationImage7.png)
 
 accessed by going to  **WooCommerce**  menu and clicking on **Status** link, and then going to **Logs** tab.
 
@@ -122,7 +122,7 @@ You can also access today’s log file by clicking on **Today’s Logs** link un
 
 listing.
 
-![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationGuide9.png)
+![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationImage8.png)
 
 **Multi – currency plugin compatibility**
 

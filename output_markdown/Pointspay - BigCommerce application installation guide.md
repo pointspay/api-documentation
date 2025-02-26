@@ -8,17 +8,17 @@ Pointspay - BigCommerce application
 
 By going to **Apps > Marketplace,** merchant goes on the[ BigCommerce marketplace ](https://www.bigcommerce.com/apps/)where he/she can search for a Pointspay application. 
 
-![](../output_images/bigCommerceImages/PP-BC01.png) 
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage1.png) 
 
 Then, merchants should be able to search and then install the Pointspay integration as a BigCommerce application from the BigCommerce marketplace. 
 
-![](../output_images/bigCommerceImages/PP-BC02.png)When merchant click on “*Get this app*” button, he/she should be redirected to the marketplace app page: 
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage2.png)When merchant click on “*Get this app*” button, he/she should be redirected to the marketplace app page: 
 
-![](../output_images/bigCommerceImages/PP-BC03.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage3.png)
 
 When the app is installed, its configuration page should be displayed to a merchant and the menu item should appear in *Apps* section*.* 
 
-![](../output_images/bigCommerceImages/PP-BC04.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage4.png)
 
 <a name="_page2_x69.00_y72.00"></a>**Configuration page** 
 
@@ -36,11 +36,11 @@ If the merchant is not authorized, he/she only has access to the *Authorization*
 
 The merchant needs to select the environment and enter the API key to fetch Pointspay payment methods and configure them. 
 
-![](../output_images/bigCommerceImages/PP-BC05.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage5.png)
 
 If the API key is valid and the authorization is successful, the merchant will see a message confirming successful authorization. Two additional tabs (*General settings* and *Payment flavours*) become available on the configuration page. 
 
-![](../output_images/bigCommerceImages/PP-BC06.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage6.png)
 
 **General settings** 
 
@@ -50,19 +50,19 @@ The other option allows the merchant to define the order status that should be a
 
 navigating to “*Orders* → *Order Statuses*”. However, all available statuses are listed with the default status being “*Awaiting fulfillment*”.  
 
-![](../output_images/bigCommerceImages/PP-BC07.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage7.png)
 
 **Payment flavours** 
 
 In the payment flavours tab, the retrieved available methods are displayed as items, where each payment flavour can be individually configured. 
 
-![](../output_images/bigCommerceImages/PP-BC08.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage8.png)
 
 The merchant can enable or disable a method, select countries in which the method will be available, and set a sort order number to define the order in which the payment methods appear at checkout. To configure the method, a merchant must enter the shop code used for payment requests, along with the consumer key and the Pointspay certificate. 
 
-![](../output_images/bigCommerceImages/PP-BC09.png)After the credentials are saved, integration will generate a certificate public/private key pair and show the private key as a read-only field, with only the last four characters displayed to the user. 
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage9.png)After the credentials are saved, integration will generate a certificate public/private key pair and show the private key as a read-only field, with only the last four characters displayed to the user. 
 
-![](../output_images/bigCommerceImages/PP-BC10.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage10.png)
 
 Finally, merchants can download the **.*cer*** certificate file to share with the Pointspay team and process payment requests from the BigCommerce. 
 
@@ -74,17 +74,17 @@ A payment method appears at checkout if it is enabled on the configuration page 
 
 If the customer has other payment methods available besides the Pointspay payment methods (such as Cash on Delivery), those will be listed before the Pointspay methods. Pointspay payment methods appearing afterward in the order defined on the configuration page. 
 
-![](../output_images/bigCommerceImages/PP-BC11.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage11.png)
 
 After the customer selects a Pointspay payment flavor and submits an order, the integration will redirect the customer to the payment page, where she/he can finalize or cancel the payment. 
 
 In case the payment is successful, the customer is redirected to the *Thank You* page. 
 
-![](../output_images/bigCommerceImages/PP-BC12.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage12.png)
 
 In case of a payment error or cancellation on the payment page, the customer is redirected back to the payment step of the checkout page. Also, a customer is shown a message why he was returned to checkout page. 
 
-![](../output_images/bigCommerceImages/PP-BC13.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage13.png)
 
 <a name="_page7_x69.00_y310.00"></a>**Refund** 
 
@@ -96,9 +96,9 @@ Merchant can refund a paid order by clicking on the Refund menu item on the sele
 
 
 
-| ![](../output_images/bigCommerceImages/PP-BC14.png) |
+| ![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage14.png) |
 |-------------------------------------------|
-| ![](../output_images/bigCommerceImages/PP-BC15.png) |
+| ![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage15.png) |
 
 The Pointspay application handles only methods that don’t have Store Credit method and in that case try to create refund on the Pointspay. This is because, in the case of a Store Credit refund, the order is refunded, but the payment is not since the customer receives credits that can be used as a discount in a future purchase. 
 
@@ -108,10 +108,10 @@ Since it is not possible to reject a refund action or delete a created refund on
 
 Apart from the logs on the server, the merchant can see that refund is declined and the reason on the order details page as order comments section. Despite an order comment, the status of the order itself is still refund (or partial refund) as if refund request passed successfully. 
 
-![](../output_images/bigCommerceImages/PP-BC16.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage16.png)
 
 <a name="_page9_x69.00_y365.00"></a>**Application uninstallation** 
 
 If the merchant wants to uninstall the application, he/she needs to find apps among *My Apps* application or on the BigCommerce marketplace. Then, merchant should click on the “*Uninstall*” button. Uninstall action removes all configuration and other data for this merchant from the database. 
 
-![](../output_images/bigCommerceImages/PP-BC17.png)
+![](../output_images/bigCommerceImages/BigCommercePluginInstallationImage17.png)
