@@ -90,7 +90,7 @@ In order to securely transact with PointsPay, all transaction requests are requi
 
 You can generate a self-signed certificate using below *openssl* command: 
 
-openssl req -newkey rsa:8192 -nodes -keyout key.pem -x509 -days 1095 -out ![](../output_images/WooCommercePluginInstallationGuideImages/WooCommercePluginInstallationGuide6.png)
+openssl req -newkey rsa:8192 -nodes -keyout key.pem -x509 -days 1095 -out 
 
 This plugin assumes that the generated key has no password and SHA256 encryption has been used. The above command complies to both the assumptions. 
 
