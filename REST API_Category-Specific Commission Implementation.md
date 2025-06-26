@@ -1,7 +1,5 @@
 # Pointspay
 
-----
-
 ### **Appendix 1: Category-Specific Commission Implementation**
 
 This appendix details the implementation for merchants who require category-specific commission calculations. This functionality is optional and should only be utilized if the commission rates for different product categories vary.
@@ -27,7 +25,7 @@ The following parameters are used to specify category-specific amounts within th
 
 | Parameter | Type   | Mandatory | Description                                                                                                                                                                                                                                        |
 | --------- | ------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| amount    | String | No        | - The category-specific amount in minor units.                                                                - Maximum 10 characters.                           - E.g., For a category amount of USD 100.00, the value passed should be `10000` . |
+| amount    | String | No        |- The category-specific amount in minor units. <br>- Maximum 10 characters.<br>- E.g., For a category amount of USD 100.00, the value passed should be `10000` .|
 | code      | String | No        | This is the category code. It is crucial that the category code is unique for each category.                                                                                                                                                       |
 
 -----
