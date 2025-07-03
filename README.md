@@ -585,6 +585,8 @@ It is the list of product categories with amount per category.
 | amount    | string | N         | - The category-specific amount in minor units.<br>- Max 10 characters.<br>- E.g., For a category amount of USD 100.00, pass value as 10000. |
 | code      | string | N         | - It is the category code. It should be unique for each category.                                                                           |
 
+Please refer to [Category Appendix](https://github.com/pointspay/api-documentation/blob/main/REST%20API_Category-Specific%20Commission%20Implementation.md) for more details about categories.
+
 _Table 15_
 
 ### 6.3. Custom Data
