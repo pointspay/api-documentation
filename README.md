@@ -159,7 +159,7 @@ You need to provide 3 redirect URLs during onboarding:
 2. **Cancel link:** The URL to which the shopper would be redirected if he decides to pay with another payment option.
 3. **Failure link:** The URL to which the shopper would be redirected when the payment fails.
 
-All these links can be the same, depending on your application logic. They will all have the following request body parameters submitted by Pointspay while redirection, Pointspay will do HTTP POST form submission and will send the following parameters while redirecting.
+All these links can be the same, depending on your application logic. They will all have the following request body parameters submitted by Pointspay while redirection. Pointspay will do HTTP POST form submission for the SUCCESS transaction and HTTP GET for the FAILED or CANCELED transaction. Pointspay will send the following parameters while redirecting.
 
 | Parameter       | Description                                                                                                                                                                   |
 |:----------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -659,3 +659,4 @@ _Table 17_
 | `{"code": "TRANSACTION_NOT_FOUND", "message": "Payment with the provided ID was not found. Please check if Payment ID is valid.", "key": "TRANSACTION_NOT_FOUND"}` |
 
 _Table 18_
+
