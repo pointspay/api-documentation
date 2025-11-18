@@ -14,7 +14,7 @@ Our implementation follows JWT.IO standards by:
 2. **Signature Verification**: Use RSA public keys from JWKS with proper key rotation support
 3. **Standard Claims Validation**: Verify `iss` (issuer URL), `aud` (audience), `exp` (expiration), `iat` (issued at)
 4. **Key Discovery**: Leverage OIDC discovery (`/.well-known/openid-configuration`) for automatic JWKS URI resolution
-5. **Dynamic Audience**: Support per-client audience identifiers (multi-tenant security)
+5. **Dynamic Audience**: Support per-merchant audience identifiers (multi-tenant security)
 
 > **Security Note**: Never trust the header `alg` blindly; enforce the expected algorithm (RS256/RS384/RS512). Always validate audience, issuer URL, expiration and (optionally) nonce / subject according to your business rules.
 
@@ -32,7 +32,7 @@ PointsPay token verification follows the JWT.IO standard workflow:
 5. **Signature Verification**: Verify RSA signature using RSASSA-PKCS1-v1_5 with SHA-256/SHA-384/SHA-512
 6. **Claims Validation**:
    - `iss` (issuer): Matches expected PointsPay issuer URL (e.g., `https://api.pointspay.com/v4`)
-   - `aud` (audience): Matches your unique client/merchant ID
+   - `aud` (audience): Matches your unique audience
    - `exp` (expiration): Token not expired (with clock skew tolerance)
    - `iat` (issued at): Token issued at reasonable time
    - Business claims: `stat`, `amt`, `oid`, etc.
@@ -102,7 +102,7 @@ Production-ready code examples following JWT.IO standards for different language
 
 This implementation follows JWT.IO standards with:
 - ✅ Automatic OIDC discovery for JWKS endpoint
-- ✅ Dynamic audience support (per-client/merchant)
+- ✅ Dynamic audience support
 - ✅ Algorithm enforcement (RS256/RS384/RS512)
 - ✅ Full claims validation (iss, aud, exp, iat)
 - ✅ Key rotation support via `kid` matching
@@ -112,7 +112,7 @@ This implementation follows JWT.IO standards with:
 JWT Signature Verification for PointsPay API
 
 This module provides production-ready JWT verification with dynamic audience support.
-Each client/merchant has their unique audience identifier for secure token validation.
+Each merchant has their unique audience identifier for secure token validation.
 """
 
 import base64
@@ -196,7 +196,7 @@ def verify_pointspay_token(
     
     Args:
         token: JWT token from PointsPay API
-        audience: Your unique client/merchant identifier
+        audience: Your unique merchant identifier
         verify_expiration: Whether to verify token hasn't expired (default: True)
         
     Returns:
@@ -232,7 +232,7 @@ def verify_pointspay_token(
 
 # Example usage
 if __name__ == "__main__":
-    AUDIENCE = "YOUR_CLIENT_ID"  # Replace with your actual client/merchant ID
+    AUDIENCE = "<SHOP_CODE>"  # Replace with your actual merchant ID
     payment_token = "eyJhbGc..."  # Replace with actual token from PointsPay
     
     try:
@@ -447,7 +447,7 @@ Following JWT.IO standards helps avoid these common security issues:
 | **Algorithm confusion** | Token header says RS256 but code allows HS256 | ✅ Explicitly whitelist RS256/RS384/RS512 only - never trust header `alg` |
 | **Key rotation issues** | New key appears, old one removed | ✅ Cache JWKS with TTL; refetch on `kid` miss; support multiple active keys |
 | **Clock skew** | Minor diff in server times fails exp/iat | ✅ Allow small leeway (e.g. 60s) per JWT spec |
-| **Missing audience check** | Any site could reuse token | ✅ Enforce exact expected audience per client/merchant |
+| **Missing audience check** | Any site could reuse token | ✅ Enforce exact expected audience per merchant |
 | **Expired tokens accepted** | Missing exp validation | ✅ Use library options to require `exp` and validate it |
 | **Issuer not validated** | Token from wrong source accepted | ✅ Validate `iss` claim matches PointsPay issuer URL (e.g., `https://api.pointspay.com/v4`) |
 | **Missing required claims** | Token lacks critical claims | ✅ Require `iss`, `aud`, `exp`, `iat` per OIDC/JWT standards |
