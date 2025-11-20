@@ -4,8 +4,8 @@ This guide shows how to verify JWT tokens issued by Pointspay services following
 
 ## JWKS Endpoints
 
-- UAT: `https://uat-api.pointspay.com/.well-known/jwks.json`
-- Prod: `https://api.pointspay.com/.well-known/jwks.json`
+- UAT: `https://uat-api.pointspay.com/v4/.well-known/jwks.json`
+- Prod: `https://api.pointspay.com/v4/.well-known/jwks.json`
 
 ## JWT.IO Standard Compliance
 
