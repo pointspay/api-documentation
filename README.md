@@ -396,7 +396,7 @@ Pointspay returns the OAuth authorization parameters in the API response header.
 **Steps to verify signature:**
 
 1. Sort the response in alphabetical order.
-2. Minify/Compress the response body so that it doesn’t contain any white space characters.
+2. Minify/Compress the response JSON so that it doesn’t contain any white space in the markup. (Simple example: ```{"status":"accepted","status_message":"Transaction is accepted"}```)
 3. Include only non-empty properties for verification.
 4. Append values of OAuth parameters in the response body string in the order specified in Table 11 under section 5.1, to generate the response message.
 5. Retrieve the “oauth_signature” parameter from the response Authorization header.
@@ -659,4 +659,5 @@ _Table 17_
 | `{"code": "TRANSACTION_NOT_FOUND", "message": "Payment with the provided ID was not found. Please check if Payment ID is valid.", "key": "TRANSACTION_NOT_FOUND"}` |
 
 _Table 18_
+
 
