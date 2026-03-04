@@ -43,8 +43,8 @@ This document describes the **Server-to-Server (S2S) integration** that your loy
 │                        MERCHANT CHECKOUT                         │
 │                                                                  │
 │   ┌─────────────┐    ┌──────────────┐    ┌────────────────────┐  │
-│   │  Cash Leg    │    │  Points Leg  │    │  Earn-Back Leg     │  │
-│   │  (Card Pay)  │ +  │  (Redeem)    │ +  │  (Accrue on Cash)  │  │
+│   │  Cash Leg   │    │  Points Leg  │    │  Earn-Back Leg     │  │
+│   │  (Card Pay) │ +  │  (Redeem)    │ +  │  (Accrue on Cash)  │  │
 │   └─────────────┘    └──────────────┘    └────────────────────┘  │
 │                                                                  │
 │   Total Order = Cash Amount + Points Amount                      │
@@ -146,23 +146,23 @@ The diagram below shows the complete checkout lifecycle for a **split payment** 
        │  4. Redirect to program login           │                     │
        │<────────────────────────────────────────│                     │
        │                    │                    │                     │
-       │  5. Log in & authorize ────────────────────────────────────> │
+       │  5. Log in & authorize ────────────────────────────────────>  │
        │                    │                    │                     │
        │  6. Redirect back with auth code        │                     │
-       │<─────────────────────────────────────────────────────────────│
+       │<───────────────────────────────────────────────────────────── │
        │                    │                    │                     │
        │  7. Auth code      │                    │                     │
        │────────────────────────────────────────>│                     │
-       │                    │                    │  8. Exchange code    │
-       │                    │                    │     for token        │
+       │                    │                    │  8. Exchange code   │
+       │                    │                    │     for token       │
        │                    │                    │────────────────────>│
-       │                    │                    │    member_token      │
+       │                    │                    │    member_token     │
        │                    │                    │<────────────────────│
        │                    │                    │                     │
-       │                    │                    │  9. Fetch profile    │
-       │                    │                    │     & balance        │
+       │                    │                    │  9. Fetch profile   │
+       │                    │                    │     & balance       │
        │                    │                    │────────────────────>│
-       │                    │                    │  { balance: 5000 }   │
+       │                    │                    │  { balance: 5000 }  │
        │                    │                    │<────────────────────│
        │                    │                    │                     │
        │  10. Show balance & split options       │                     │
@@ -171,27 +171,27 @@ The diagram below shows the complete checkout lifecycle for a **split payment** 
        │  11. Choose split: $60 card + 2000 pts  │                     │
        │────────────────────────────────────────>│                     │
        │                    │                    │                     │
-       │                    │                    │  12. OTP (if req.)   │
+       │                    │                    │  12. OTP (if req.)  │
        │                    │                    │────────────────────>│
-       │                    │                    │  { otpSent: true }   │
+       │                    │                    │  { otpSent: true }  │
        │                    │                    │<────────────────────│
        │  13. Enter OTP     │                    │                     │
        │────────────────────────────────────────>│                     │
        │                    │                    │                     │
-       │                    │                    │  14. Redeem points   │
-       │                    │                    │  (2000 pts + OTP)    │
+       │                    │                    │  14. Redeem points  │
+       │                    │                    │  (2000 pts + OTP)   │
        │                    │                    │────────────────────>│
-       │                    │                    │  { ref: "R-123" }    │
+       │                    │                    │  { ref: "R-123" }   │
        │                    │                    │<────────────────────│
        │                    │                    │                     │
-       │                    │                    │  15. Charge card     │
-       │                    │                    │  ($60.00)            │
-       │                    │                    │──> Payment Provider  │
+       │                    │                    │  15. Charge card    │
+       │                    │                    │  ($60.00)           │
+       │                    │                    │──> Payment Provider │
        │                    │                    │                     │
-       │                    │                    │  16. Accrue points   │
-       │                    │                    │  (300 pts on $60)    │
+       │                    │                    │  16. Accrue points  │
+       │                    │                    │  (300 pts on $60)   │
        │                    │                    │────────────────────>│
-       │                    │                    │  { ref: "A-456" }    │
+       │                    │                    │  { ref: "A-456" }   │
        │                    │                    │<────────────────────│
        │                    │                    │                     │
        │  17. Confirmation  │                    │                     │
@@ -243,45 +243,45 @@ This is the **primary and recommended** authentication model for user consent. I
 
 ```
     Customer               Pointspay              Your Program (IdP)
-       │                      │                          │
-       │  1. Click "Log in    │                          │
-       │     with Program"    │                          │
-       │─────────────────────>│                          │
-       │                      │                          │
-       │  2. HTTP 302 Redirect to:                       │
-       │     {authorize_url}?                            │
-       │       response_type=code                        │
-       │       &client_id={client_id}                    │
-       │       &redirect_uri={callback}                  │
-       │       &scope={scopes}                           │
-       │       &state={session_state}                    │
-       │<─────────────────────│                          │
-       │                      │                          │
-       │  3. User logs in at your program ──────────────>│
-       │     (username / password / SSO)                 │
-       │                      │                          │
-       │  4. User authorizes Pointspay ─────────────────>│
-       │     to access their account                     │
-       │                      │                          │
-       │  5. Redirect to Pointspay callback:             │
-       │     {redirect_uri}?code={auth_code}             │
-       │       &state={session_state}                    │
-       │<─────────────────────────────────────────────── │
-       │                      │                          │
-       │                      │  6. POST {token_url}     │
+       │                      │                           │
+       │  1. Click "Log in    │                           │
+       │     with Program"    │                           │
+       │─────────────────────>│                           │
+       │                      │                           │
+       │  2. HTTP 302 Redirect to:                        │
+       │     {authorize_url}?                             │
+       │       response_type=code                         │
+       │       &client_id={client_id}                     │
+       │       &redirect_uri={callback}                   │
+       │       &scope={scopes}                            │
+       │       &state={session_state}                     │
+       │<─────────────────────│                           │
+       │                      │                           │
+       │  3. User logs in at your program ──────────────> │
+       │     (username / password / SSO)                  │
+       │                      │                           │
+       │  4. User authorizes Pointspay ─────────────────> │
+       │     to access their account                      │
+       │                      │                           │
+       │  5. Redirect to Pointspay callback:              │
+       │     {redirect_uri}?code={auth_code}              │
+       │       &state={session_state}                     │
+       │<───────────────────────────────────────────────  │
+       │                      │                           │
+       │                      │  6. POST {token_url}      │
        │                      │     grant_type=           │
        │                      │       authorization_code  │
        │                      │     code={auth_code}      │
        │                      │     client_id=...         │
        │                      │     client_secret=...     │
        │                      │     redirect_uri=...      │
-       │                      │─────────────────────────>│
-       │                      │                          │
-       │                      │  7. { access_token,      │
+       │                      │─────────────────────────> │
+       │                      │                           │
+       │                      │  7. { access_token,       │
        │                      │       token_type,         │
        │                      │       expires_in }        │
-       │                      │<─────────────────────────│
-       │                      │                          │
+       │                      │<───────────────────────── │
+       │                      │                           │
 ```
 
 **Key points**:
@@ -310,10 +310,10 @@ This is the **primary and recommended** authentication model for user consent. I
     Pointspay                         Your Program
        │                                  │
        │  POST {token_url}                │
-       │    grant_type=client_credentials  │
-       │    client_id={s2s_client_id}      │
-       │    client_secret={s2s_secret}     │
-       │    audience={audience}            │
+       │    grant_type=client_credentials │
+       │    client_id={s2s_client_id}     │
+       │    client_secret={s2s_secret}    │
+       │    audience={audience}           │
        │─────────────────────────────────>│
        │                                  │
        │  { access_token, expires_in }    │
@@ -397,15 +397,15 @@ Pointspay requests an OTP to be sent to the member. The member enters the OTP in
        │                      │───────────────────────────>│
        │                      │                            │
        │                      │  2. { otpSent: true,       │
-       │                      │    otpReceiver: "+XX**89",  │
-       │                      │    otpExpiration: "..." }   │
+       │                      │    otpReceiver: "+XX**89", │
+       │                      │    otpExpiration: "..." }  │
        │                      │<───────────────────────────│
        │                      │                            │
        │                      │      ┌──── SMS/Email ─────>│ Member's
-       │                      │      │    with OTP code     │ phone/email
-       │                      │      │                      │
-       │  3. Enter OTP code   │      │                      │
-       │─────────────────────>│      │                      │
+       │                      │      │    with OTP code    │ phone/email
+       │                      │      │                     │
+       │  3. Enter OTP code   │      │                     │
+       │─────────────────────>│      │                     │
        │                      │                            │
        │                      │  4. Redeem + OTP           │
        │                      │     POST /redeem           │
@@ -442,7 +442,7 @@ For certain programs (notably UAE banks), the burn requires approval via the mem
        │                      │<───────────────────────────│
        │                      │                            │
        │                      │          Push notification │
-       │  ┌───────────────────│──────────────────────────>│ Member's
+       │  ┌───────────────────│──────────────────────────> │ Member's
        │  │  3. Approve in    │                            │ banking app
        │  │     banking app   │                            │
        │  └──────────────────>│                            │
@@ -750,7 +750,7 @@ When your program requires OTP, the flow is a **two-step** process:
        │  {                                    │
        │    otpSent: true,                     │
        │    otpReceiver: "+XX****89",          │
-       │    otpExpiration: "2026-03-04T..."     │
+       │    otpExpiration: "2026-03-04T..."    │
        │  }                                    │
        │<──────────────────────────────────────│
        │                                       │
@@ -788,7 +788,7 @@ In a split payment, Pointspay orchestrates three operations in sequence:
     Step 1              Step 2              Step 3
     POINTS LEG          CASH LEG            EARN-BACK
     ┌──────────┐        ┌──────────┐        ┌──────────┐
-    │  Redeem  │──OK──>│  Charge  │──OK──>│  Accrue  │
+    │  Redeem  │──OK──> │  Charge  │──OK──> │  Accrue  │
     │  Points  │        │  Card    │        │  Points  │
     └──────────┘        └──────────┘        └──────────┘
          │                   │                   │
@@ -807,7 +807,7 @@ In a split payment, Pointspay orchestrates three operations in sequence:
        │                       │                       │
        │  1. Redeem 2000 pts   │                       │
        │──────────────────────>│                       │
-       │  { ref: "R-123" }    │                       │
+       │  { ref: "R-123" }     │                       │
        │<──────────────────────│                       │
        │                       │                       │
        │  2. Charge $60.00     │                       │
@@ -818,7 +818,7 @@ In a split payment, Pointspay orchestrates three operations in sequence:
        │  3. Accrue 300 pts    │                       │
        │  (earn-back on $60)   │                       │
        │──────────────────────>│                       │
-       │  { ref: "A-456" }    │                       │
+       │  { ref: "A-456" }     │                       │
        │<──────────────────────│                       │
        │                       │                       │
        │  Transaction Complete │                       │
@@ -899,7 +899,7 @@ If a reversal call fails (network error, temporary unavailability), Pointspay wi
 
 ```
 ┌────────────────────────────────────────────────────┐
-│              REVERSAL RETRY STRATEGY                │
+│              REVERSAL RETRY STRATEGY               │
 ├────────────────────────────────────────────────────┤
 │                                                    │
 │  Attempt 1:  Immediate                             │
