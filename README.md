@@ -11,8 +11,8 @@
 
 | Environment | Interactive Docs (Swagger UI) | Reference Docs (ReDoc) | OpenAPI Spec |
 |:------------|:------------------------------|:-----------------------|:-------------|
-| **UAT / Sandbox** | [uat-api.pointspay.com/v5/openapi/docs](https://uat-api.pointspay.com/v5/openapi/docs) | — | [openapi.json](https://uat-api.pointspay.com/v5/openapi.json) |
-| **Production** | — | [api.pointspay.com/v5/openapi/redoc](https://api.pointspay.com/v5/openapi/redoc) | [openapi.json](https://api.pointspay.com/v5/openapi.json) |
+| **UAT / Sandbox** | [uat-api.pointspay.com/v5/openapi/docs](https://uat-api.pointspay.com/v5/openapi/docs) | [uat-api.pointspay.com/v5/openapi/redoc](https://uat-api.pointspay.com/v5/openapi/redoc) | [openapi.json](https://uat-api.pointspay.com/v5/openapi.json) |
+| **Production** | [api.pointspay.com/v5/openapi/docs](https://api.pointspay.com/v5/openapi/docs) | [api.pointspay.com/v5/openapi/redoc](https://api.pointspay.com/v5/openapi/redoc) | [openapi.json](https://api.pointspay.com/v5/openapi.json) |
 
 > **Which link should I use?**
 > - Use the **UAT Swagger UI** during development — it lets you execute requests directly from the browser against the sandbox.
