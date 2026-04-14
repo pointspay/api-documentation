@@ -4,8 +4,10 @@ This guide shows how to verify JWT tokens issued by Pointspay services following
 
 ## JWKS Endpoints
 
-- UAT: `https://uat-api.pointspay.com/v4/.well-known/jwks.json`
-- Prod: `https://api.pointspay.com/v4/.well-known/jwks.json`
+- UAT: `https://uat-api.pointspay.com/v5/.well-known/jwks.json`
+- Prod: `https://api.pointspay.com/v5/.well-known/jwks.json`
+
+> For the full interactive API specification, see the [Production ReDoc](https://api.pointspay.com/v5/openapi/redoc) or the [UAT Swagger UI](https://uat-api.pointspay.com/v5/openapi/docs).
 
 ## JWT.IO Standard Compliance
 
@@ -31,7 +33,7 @@ PointsPay token verification follows the JWT.IO standard workflow:
    - Locate public key matching the token's `kid`
 5. **Signature Verification**: Verify RSA signature using RSASSA-PKCS1-v1_5 with SHA-256/SHA-384/SHA-512
 6. **Claims Validation**:
-   - `iss` (issuer): Matches expected PointsPay issuer URL (e.g., `https://api.pointspay.com/v4`)
+   - `iss` (issuer): Matches expected PointsPay issuer URL (e.g., `https://api.pointspay.com/v5`)
    - `aud` (audience): Matches your unique audience
    - `exp` (expiration): Token not expired (with clock skew tolerance)
    - `iat` (issued at): Token issued at reasonable time
@@ -49,7 +51,7 @@ eyJhbGciOiJSUzI1NiIsImtpZCI6InBwLWRlbW8ta2V5LTEiLCJ0eXAiOiJKV1QifQ.eyJjdXIiOiJBR
 
 Fetch the JWKS from the appropriate endpoint (UAT or Prod).
 
-Example: https://uat-api.pointspay.com/.well-known/jwks.json
+Example: https://uat-api.pointspay.com/v5/.well-known/jwks.json
 
 ```json 
 {
@@ -78,7 +80,7 @@ Example: https://uat-api.pointspay.com/.well-known/jwks.json
   "stat": "CAPTURED",
   "pacc": 85,
   "vpa": 1.5,
-  "iss": "https://api.pointspay.com/v4",
+  "iss": "https://api.pointspay.com/v5",
   "amt": 11250,
   "pid": "271d2f32fcbf430080cab16d6810c8cc",
   "oid": "39",
@@ -262,7 +264,7 @@ if __name__ == "__main__":
 import { createRemoteJWKSet, jwtVerify, decodeProtectedHeader } from 'jose';
 
 const JWKS_URL = 'https://{yourDomain}/.well-known/jwks.json';
-const EXPECTED_ISS = 'https://api.pointspay.com/v4';  // Issuer is a URL
+const EXPECTED_ISS = 'https://api.pointspay.com/v5';  // Issuer is a URL
 const EXPECTED_AUD = 'your-audience-here';
 const ALLOWED_ALGORITHMS = ['RS256', 'RS384', 'RS512'];
 
@@ -309,7 +311,7 @@ use phpseclib3\Math\BigInteger;
 use phpseclib3\Crypt\RSA;
 
 $JWKS_URL = 'https://{pointspay_domain}/.well-known/jwks.json';
-$EXPECTED_ISS = 'https://api.pointspay.com/v4';  // Issuer is a URL
+$EXPECTED_ISS = 'https://api.pointspay.com/v5';  // Issuer is a URL
 $EXPECTED_AUD = 'your-audience-here';
 $ALLOWED_ALGORITHMS = ['RS256', 'RS384', 'RS512'];
 
@@ -399,7 +401,7 @@ import java.util.Set;
 
 public class JwtVerifier {
     private static final String JWKS_URL = "https://{yourDomain}/.well-known/jwks.json";
-    private static final String EXPECTED_ISS = "https://api.pointspay.com/v4";
+    private static final String EXPECTED_ISS = "https://api.pointspay.com/v5";
     private static final String EXPECTED_AUD = "your-audience-here";
     private static final Set<JWSAlgorithm> ALLOWED_ALGORITHMS = new HashSet<>(Arrays.asList(
         JWSAlgorithm.RS256, JWSAlgorithm.RS384, JWSAlgorithm.RS512
@@ -449,7 +451,7 @@ Following JWT.IO standards helps avoid these common security issues:
 | **Clock skew** | Minor diff in server times fails exp/iat | ✅ Allow small leeway (e.g. 60s) per JWT spec |
 | **Missing audience check** | Any site could reuse token | ✅ Enforce exact expected audience per merchant |
 | **Expired tokens accepted** | Missing exp validation | ✅ Use library options to require `exp` and validate it |
-| **Issuer not validated** | Token from wrong source accepted | ✅ Validate `iss` claim matches PointsPay issuer URL (e.g., `https://api.pointspay.com/v4`) |
+| **Issuer not validated** | Token from wrong source accepted | ✅ Validate `iss` claim matches PointsPay issuer URL (e.g., `https://api.pointspay.com/v5`) |
 | **Missing required claims** | Token lacks critical claims | ✅ Require `iss`, `aud`, `exp`, `iat` per OIDC/JWT standards |
 
 ---
@@ -458,4 +460,5 @@ Following JWT.IO standards helps avoid these common security issues:
 - **JWT.IO**: https://jwt.io - Interactive JWT debugger and documentation
 - **RFC 7519**: https://tools.ietf.org/html/rfc7519 - JSON Web Token standard
 - **OpenID Connect Discovery**: https://openid.net/specs/openid-connect-discovery-1_0.html
-- **PointsPay API Documentation**: Contact your integration manager for full API docs
+- **PointsPay API Documentation (V5)**: [Production ReDoc](https://api.pointspay.com/v5/openapi/redoc) ・ [UAT Swagger UI](https://uat-api.pointspay.com/v5/openapi/docs)
+- **OpenAPI Spec**: [Production JSON](https://api.pointspay.com/v5/openapi.json) ・ [UAT JSON](https://uat-api.pointspay.com/v5/openapi.json)
