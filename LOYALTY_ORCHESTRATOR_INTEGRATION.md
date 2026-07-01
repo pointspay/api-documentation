@@ -1,181 +1,123 @@
 # Pointspay — Loyalty Orchestrator API Integration Guide
 
-> 🚧 **Status: PLANNED, not yet available.** This API is in design and partner evaluation. The
-> endpoints described below are **not callable yet**. Sandbox and production availability will be
-> announced. This guide is shared for early integration planning and feedback, not for live use.
+> 🚧 This API is PLANNED and not yet callable, shared for early integration planning and feedback.
 
-**At a glance.** `/loyalty/v1` lets you **earn and burn loyalty points across four airline programs**
-(Flying Blue, Etihad Guest, SAS EuroBonus, Miles & More) through one API, in three flows: **earn**
-(accrue on a cash order), **burn** (redeem for part or all), and **split** (both on one order). It
-**moves points, not money** (you keep the cash leg) and carries no cardholder data, so it adds no PCI
-scope.
+It moves points, not money and holds no cardholder data, so it adds no PCI scope.
 
 | | |
 |---|---|
-| **Base URL (prod)** | `https://api.pointspay.com/loyalty/v1` |
-| **Base URL (sandbox)** | `https://uat-api.pointspay.com/loyalty/v1` |
-| **Partner auth** | `X-API-Key` plus `X-Partner-Code` (optional mTLS in production) |
-| **Member auth** | `X-Member-Token` from a one-time member context, on member-scoped calls |
-| **Format** | JSON. Integer point amounts. `{code, message, key}` error model |
+| Base URL (prod) | `https://api.pointspay.com/loyalty/v1` |
+| Base URL (sandbox) | `https://uat-api.pointspay.com/loyalty/v1` |
+| Partner auth | `X-API-Key` plus `X-Partner-Code` (optional mTLS in production) |
+| Member auth | `X-Member-Token` from a one-time member context, on member-scoped calls |
+| Format | JSON. Integer point amounts. `{code, message, key}` error model |
 
 ---
 
 ## Table of Contents
 
-1. [Overview](#1-overview)
-2. [Scenarios](#2-scenarios)
-3. [Consent Model](#3-consent-model)
-4. [Per-Program Capability](#4-per-program-capability)
-5. [Authentication (Two Layers)](#5-authentication-two-layers)
-   - 5.1 [Partner Authentication](#51-partner-authentication)
-   - 5.2 [Member Context](#52-member-context)
-6. [Endpoints](#6-endpoints)
-7. [Example A: Earn](#7-example-a-earn)
-8. [Example B: Burn](#8-example-b-burn)
-9. [Example C: Earn and Burn Together (Split)](#9-example-c-earn-and-burn-together-split)
-10. [Status Lifecycle](#10-status-lifecycle)
-11. [Webhooks (Signed JWT)](#11-webhooks-signed-jwt)
-12. [Reversals & Refunds](#12-reversals--refunds)
-13. [Errors & Idempotency](#13-errors--idempotency)
-14. [Onboarding Checklist](#14-onboarding-checklist)
+- [Pointspay — Loyalty Orchestrator API Integration Guide](#pointspay--loyalty-orchestrator-api-integration-guide)
+  - [Table of Contents](#table-of-contents)
+  - [1. Consent Model](#1-consent-model)
+  - [2. Per-Program Capability](#2-per-program-capability)
+  - [3. Authentication (Two Layers)](#3-authentication-two-layers)
+    - [3.1 Partner Authentication](#31-partner-authentication)
+    - [3.2 Member Context](#32-member-context)
+  - [4. Endpoints](#4-endpoints)
+  - [5. Example A: Burn](#5-example-a-burn)
+  - [6. Example B: Earn](#6-example-b-earn)
+  - [7. Example C: Earn and Burn Together (Split)](#7-example-c-earn-and-burn-together-split)
+  - [8. Status Lifecycle](#8-status-lifecycle)
+  - [9. Webhooks (Signed JWT)](#9-webhooks-signed-jwt)
+  - [10. Reversals \& Refunds](#10-reversals--refunds)
+  - [11. Errors \& Idempotency](#11-errors--idempotency)
+  - [12. Onboarding Checklist](#12-onboarding-checklist)
 
 ---
 
-## 1. Overview
+## 1. Consent Model
 
-Beyond earn, burn, and split, the API covers program discovery, one-time member authentication,
-balance, quote, full or partial **reversal**, **status** query, a **reconciliation** list, and
-signed-JWT **webhooks**. Per-program behaviours in this guide are verified against Pointspay's
-production loyalty integrations. The `/loyalty/v1` surface is defined by this guide and the OpenAPI
-contract.
-
----
-
-## 2. Scenarios
-
-The API supports three order scenarios:
-
-```text
-┌────────────────────────────────────────────────────────────┐
-│                     SCENARIO 1: EARN ONLY                  │
-│   Cash-only order. Points are EARNED on the amount.         │
-│   Cash leg: €100.00    Earned: 500 pts    Burned: 0         │
-├────────────────────────────────────────────────────────────┤
-│             SCENARIO 2: SPLIT (EARN + BURN)                │
-│   Points burned for part. Earned on the cash part.          │
-│   Cash leg: €60.00     Burned: 2000 pts   Earned: 300       │
-├────────────────────────────────────────────────────────────┤
-│                     SCENARIO 3: FULL BURN                  │
-│   Paid 100% with points. No cash, no earn-back.             │
-│   Cash leg: €0.00      Burned: 5000 pts   Earned: 0         │
-└────────────────────────────────────────────────────────────┘
-```
-
-Worked examples for each: [Earn](#7-example-a-earn) · [Burn](#8-example-b-burn) ·
-[Split](#9-example-c-earn-and-burn-together-split).
-
----
-
-## 3. Consent Model
-
-A member is **not** logged in twice. One consent covers the whole transaction. Extra steps appear
-**only** when the program itself mandates them (per-program detail in §4).
+A member is not logged in twice. One consent covers the whole transaction. Extra steps appear
+only when the program itself mandates them (per-program detail in §2).
 
 | Operation | Member login required? | Per-burn re-verification? |
 |-----------|------------------------|----------------------------|
-| **Burn (Redeem)** | **Always** (once) | Only if the program demands it: SAS = OTP every burn, M&M = redirect every burn, FLB/Etihad = none (Etihad OTP only if configured). |
-| **Earn (Accrue)** | **Program-dependent.** Many programs allow earn with just a member id (no login). | Never. |
-| **Reversal / Refund** | **Never.** Initiated via the partner key, no user. | Never. |
+| Burn (Redeem) | Always (once) | Only if the program demands a per-burn OTP or redirect. The member's quote returns the concrete step. |
+| Earn (Accrue) | Program-dependent. Many programs allow earn with just a member id (no login). | Never. |
+| Reversal / Refund | Never. Initiated via the partner key, no user. | Never. |
 
-```text
-                      ┌─────────────────┐
-                      │  BURN or EARN?  │
-                      └────┬───────┬────┘
-                      BURN │       │ EARN
-                           ▼       ▼
-              ┌──────────────┐   ┌──────────────────────────┐
-              │ Member login │   │ Program requires login    │
-              │ ONCE         │   │ for earn?                  │
-              │ (OAuth/SAML/ │   └────┬─────────────────┬────┘
-              │  B2B token)  │     YES│                 │NO
-              └──────┬───────┘        ▼                 ▼
-                     │        ┌──────────────┐  ┌──────────────────┐
-                     │        │ Member login │  │ member id only,  │
-                     │        │ ONCE         │  │ no login         │
-                     │        └──────────────┘  └──────────────────┘
-                     ▼
-          ┌────────────────────┐
-          │ Program demands     │  SAS→OTP, M&M→redirect, FLB/ETH→no
-          │ per-burn step?      │
-          └───┬────────────┬────┘
-           YES│            │NO
-              ▼            ▼
-   ┌────────────────┐  ┌────────────────────┐
-   │ OTP / redirect │  │ burn completes      │
-   │ for THIS burn  │  │ server-side (1-click)│
-   └────────────────┘  └────────────────────┘
-```
-
-The single login establishes a **member context** (§5.2) reused for the whole transaction, including
-both legs of a split. See [Example C](#9-example-c-earn-and-burn-together-split).
+The single login establishes a member context (§3.2) reused for the whole transaction, including
+both legs of a split. See [Example C](#7-example-c-earn-and-burn-together-split).
 
 ---
 
-## 4. Per-Program Capability
+## 2. Per-Program Capability
 
-**Every program needs one member login. After that, burns are one-click except where the program
-mandates an OTP (SAS always, Etihad if configured) or a redirect (Miles & More).** Nothing is
-hard-coded: `quote` returns `oneClickEligible` and the concrete next step per member. Query capability
-at `GET /loyalty/v1/programs`.
+The catalog is dynamic: `GET /loyalty/v1/programs` returns the live set and, per program, a capability
+descriptor. The rows below are examples of that descriptor, not the full catalog.
 
-Capability uses two orthogonal axes plus a derived flag:
+One flow fits every program. You always do the same three steps: `quote` → `burn` → follow
+`nextStep`. The orchestrator handles member sign-in behind one endpoint, so the client never builds
+a program's login. The only per-program question is: does a burn need an extra step and which one?
 
-- **`authMode`**: how member context is established, once. `MEMBER_OAUTH_REDIRECT`,
-  `MEMBER_SAML_SSO`, or `B2B_MACHINE_TOKEN`.
-- **`burnStep`**: what each burn needs beyond the call. `NONE`, `OTP_CHALLENGE`, or
-  `EXTERNAL_REDIRECT`.
-- **`oneClickEligible`**: derived per member by `POST /redemptions/quote`. `true` only when a valid
-  member context exists **and** `burnStep == NONE`.
+"One-click" means the burn finishes in a single `POST /redemptions` call: no OTP, no redirect, the
+member does nothing extra. The quote tells you, before you burn, whether that applies:
 
-| Program | `authMode` (one-time) | `burnStep` (each burn) | Earn without member login? | Net after auth |
-|---------|----------------------|------------------------|----------------------------|----------------|
-| **Flying Blue** (`FLB`) | `MEMBER_OAUTH_REDIRECT` | `NONE` | Program-dependent | **No-redirect burn** |
-| **Etihad Guest** (`ETHWL`) | `MEMBER_SAML_SSO` | `NONE` or `OTP_CHALLENGE`¹ | Program-dependent | **No-redirect burn** (OTP if configured) |
-| **SAS EuroBonus** (`SAS`) | `B2B_MACHINE_TOKEN` | `OTP_CHALLENGE` | Program-dependent | No-redirect, **OTP every burn** |
-| **Miles & More** (`MAM`) | `MEMBER_OAUTH_REDIRECT` | `EXTERNAL_REDIRECT` | Program-dependent | **Redirect every burn** (MCheckout) |
+- `oneClickEligible` (from `quote`): `true` when the burn will complete in one call, with no OTP
+  and no redirect. (This holds when a valid member context exists and the program's `burnStep` is `NONE`.)
+- `burnStep` (per program): what a burn needs beyond the call. `NONE` (one-click), `OTP_CHALLENGE`
+  (an OTP), `EXTERNAL_REDIRECT` (a browser redirect), or a combination applied in order (SAS needs
+  both). When a step is needed, the burn response carries the concrete OTP target or `redirectUrl`.
 
-¹ Etihad's per-burn OTP is governed by that program's configuration. The capability descriptor flags
-this with `burnStepConditional: true`, and a member's **quote** always returns the concrete answer.
+| Program (example) | Extra step per burn? | Runtime `nextStep` | What you call |
+| --- | --- | --- | --- |
+| Flying Blue (`FLB`) | Yes. A redirect each burn | `REDIRECT_REQUIRED` | `quote → burn → follow nextStep` |
+| Etihad Guest (`ETH`) | No, unless the program enables OTP | `BURN_NOW` or `OTP_REQUIRED` | `quote → burn → follow nextStep` |
+| SAS EuroBonus (`SAS`) | Yes. A redirect and an OTP | `REDIRECT_REQUIRED` then `OTP_REQUIRED` | `quote → burn → follow nextStep` |
+| Miles & More (`MAM`) | Yes. A redirect each burn | `REDIRECT_REQUIRED` | `quote → burn → follow nextStep` |
+| *(other programs)* | Per the descriptor | from `quote` | `quote → burn → follow nextStep` |
+
+The last column never changes. Per-program behaviour lives in the data (`burnStep`, `nextStep`), not in
+your integration.
+
+Each `nextStep` maps to one client action. A burn can need more than one, so follow `nextStep`
+until the burn is `REDEEMED` (SAS returns `REDIRECT_REQUIRED`, then `OTP_REQUIRED`):
+
+| `nextStep` | Your next action |
+| --- | --- |
+| `BURN_NOW` | One call, no OTP and no redirect. The burn completes immediately. |
+| `OTP_REQUIRED` | Burn, then submit the OTP the member receives (`POST /redemptions/{op}/otp`). |
+| `REDIRECT_REQUIRED` | Burn, then send the member to the `redirectUrl` in the response to approve this burn. |
+| `AUTH_REQUIRED` | The member is not signed in. Establish a member context (§3.2), then re-quote. |
+
+Your code reads capabilities from the descriptor, `GET /loyalty/v1/programs/{code}`:
+
+```json
+{
+  "programCode": "SAS",
+  "displayName": "SAS EuroBonus",
+  "burnStep": ["EXTERNAL_REDIRECT", "OTP_CHALLENGE"],
+  "burnStepConditional": false,
+  "earnRequiresMemberLogin": false,
+  "reversible": true,
+  "reversalWindowDays": 180
+}
+```
 
 ---
 
-## 5. Authentication (Two Layers)
+## 3. Authentication (Two Layers)
 
-You build one thing: a static API key. Pointspay hides each program's OAuth, SAML, and token login
-behind one endpoint, and the member logs in only once. This works because there are **two independent
-layers**: the partner layer has **no user**, and the member layer logs the user in **once** (per §3).
+The client builds one thing: a static API key. Authentication has two independent layers:
 
-```text
-   ┌─────────────────────────────────────────────────────────────┐
-   │  LAYER 1: PARTNER AUTH  (client → Pointspay)                 │
-   │  Machine-to-machine. NO user, NO login screen.               │
-   │  X-API-Key + X-Partner-Code  (optional mTLS in production)   │
-   │  Reused on every call, for the life of the credential.       │
-   └─────────────────────────────────────────────────────────────┘
-                              ▲ wraps every request
-   ┌─────────────────────────────────────────────────────────────┐
-   │  LAYER 2: MEMBER CONTEXT  (the user → their program)         │
-   │  The ONLY login. Done ONCE per member (§3).                  │
-   │  Reused for the whole transaction (burn AND earn-back).      │
-   │  Re-verification only if the program demands it (OTP/redirect)│
-   └─────────────────────────────────────────────────────────────┘
-```
+- Layer 1, partner auth (client → Pointspay): machine-to-machine, no user, no login screen.
+  `X-API-Key` + `X-Partner-Code`, reused on every call for the life of the credential.
+- Layer 2, member context (user → their program): the only login, done once per member (§1),
+  reused for the whole transaction. Re-verification only if the program demands it (OTP or redirect).
 
-### 5.1 Partner Authentication
+### 3.1 Partner Authentication
 
-The client authenticates with a **static API key**, the same model as Pointspay's existing public
-API, so there is nothing new to build. The key carries its scopes (`loyalty.read` / `loyalty.earn` /
-`loyalty.burn` / `loyalty.reverse`) and is redacted from logs. Store it as a server secret.
+A static API key, scoped to `loyalty.read` / `loyalty.earn` / `loyalty.burn` / `loyalty.reverse`.
 
 | Header | Value |
 |--------|-------|
@@ -188,107 +130,157 @@ curl https://api.pointspay.com/loyalty/v1/programs \
   -H "X-Partner-Code: acme-travel"
 ```
 
-### 5.2 Member Context
+### 3.2 Member Context
 
-To act on a member's points, first establish a **member context**, once, via a single endpoint that
-hides each program's mechanics (OAuth for FLB/MAM, SAML SSO for Etihad, machine token for SAS B2B).
-No SAML or OAuth implementation is required on the client side.
+To act on a member's points, first establish a member context (once) via a single endpoint. The
+client implements no program-specific login.
 
 ```bash
 # Establish member context (once per member + program)
 curl -X POST https://api.pointspay.com/loyalty/v1/auth/member-context \
   -H "X-API-Key: $POINTSPAY_API_KEY" -H "X-Partner-Code: acme-travel" \
   -H "Content-Type: application/json" \
-  -d '{ "programCode": "FLB" }'   # redirectCompletionUrl is optional (see below)
+  -d '{ "programCode": "FLB" }'   # redirectCompletionUrl is optional
 ```
 
 The response is one of two shapes:
 
 ```jsonc
-// (a) Ready: a member token was minted (e.g. SAS B2B, or a token already held)
+// (a) Ready: a member token is available immediately (no redirect needed)
 { "nextStep": "READY", "contextRef": "ctx_8Jk2p", "memberToken": "eyJ...", "memberRef": "mbr_FLB_77x", "expiresAt": "2026-06-30T13:00:00Z" }
 
 // (b) Redirect: send the user's browser once to authenticate. The token is delivered to your backend
 { "nextStep": "AUTH_REDIRECT_REQUIRED", "contextRef": "ctx_8Jk2p", "redirectUrl": "https://api.pointspay.com/loyalty/v1/auth/redirect/ctx_8Jk2p", "expiresAt": "2026-06-30T12:15:00Z" }
 ```
 
-#### Completing a redirect: how the client knows the user is back
+When the response is `AUTH_REDIRECT_REQUIRED`, open `redirectUrl` for the member to sign in. Detect
+completion by polling `GET /auth/member-context/{contextRef}` (its `status` is `PENDING_REDIRECT` until
+`READY`) or by the `member-context.ready` webhook (§9). Optionally set `redirectCompletionUrl` to
+return the browser to your app. The `memberToken` is delivered only to your backend, never through the
+browser.
 
-Open `redirectUrl` in a web-view, in-app browser tab, or the system browser. The member
-authenticates. Pointspay completes the OAuth/SAML exchange **server-side**, mints the member token,
-and marks the context `READY`.
-
-`redirectCompletionUrl` is **optional**: set it to return the browser to a link your app claims
-(option 1 below), or omit it to detect completion by polling or webhook (options 2 to 3). If omitted,
-Pointspay shows a default "you can close this page" screen.
-
-```text
-   App / web-view                Pointspay                 Program login
-      │  open redirectUrl ─────────────────────────────────────>│
-      │  member authenticates ─────────────────────────────────>│
-      │                            │<── OAuth/SAML callback ──────│   (server-side, token minted)
-      │  ── (A) if redirectCompletionUrl set: 302 → your link (contextRef, status) → close web-view
-      │  ── (B) poll GET /auth/member-context/{contextRef} → READY
-      │  ── (C) member-context.ready webhook (signed JWT) → carries memberToken to your backend
-      │
-      │  token to your backend (server-to-server): webhook (C, push) OR POST .../token (pull)
-      │  POST /auth/member-context/{contextRef}/token ─────────>│  { memberToken, memberRef }
-      │<───────────────────────────│
-```
-
-1. **Deep link / universal link (recommended for mobile).** Set `redirectCompletionUrl` to a link
-   your app claims (Android App Link / iOS Universal Link, or a custom scheme like
-   `acme://loyalty/callback`). The OS hands control back to your app, which dismisses the web-view.
-2. **Poll (works everywhere, and is the deep-link fallback).** Poll
-   `GET /auth/member-context/{contextRef}` until `status` is `READY` (or `EXPIRED`), about every 2 s,
-   with a timeout at `expiresAt`. Most robust for embedded web-views.
-3. **`member-context.ready` webhook (push).** A signed JWT sent to your backend carrying the
-   `memberToken` and `memberRef` directly (§11). No `POST .../token` call needed.
-
-> **Security: the token never travels through the browser.** The redirect carries only `contextRef`
-> and `status`. The `memberToken` reaches your backend only, via the signed `member-context.ready`
-> webhook (push) or `POST /auth/member-context/{contextRef}/token` (pull), never the web-view, URL, or
-> logs.
-
-Thereafter the **member token** is presented on member-scoped calls (`X-Member-Token`): balance,
-quote, burn, and OTP-submit. It proves the **member session**, separate from the partner key.
+Thereafter the member token is presented on member-scoped calls (`X-Member-Token`): balance,
+quote, burn and OTP-submit. It proves the member session, separate from the partner key.
 
 Member-context endpoints: `GET /auth/member-context/{contextRef}` (status: `PENDING_REDIRECT` /
 `READY` / `EXPIRED`, used for polling above), `POST /auth/member-context/{contextRef}/token` (obtain
-the token once `READY`, and refresh it later), `DELETE …/token` (revoke), and `GET …/introspect`
+the token once `READY` and refresh it later), `DELETE …/token` (revoke) and `GET …/introspect`
 (inspect validity, scope, expiry). One member context serves the whole transaction, including both
 legs of a split.
 
 ---
 
-## 6. Endpoints
+## 4. Endpoints
 
-All under `https://api.pointspay.com/loyalty/v1` (prod) / `https://uat-api.pointspay.com/loyalty/v1`
-(sandbox). Every call carries `X-API-Key` and `X-Partner-Code`.
+All paths are under the prod/sandbox base URLs shown at the top. Every call carries `X-API-Key` and
+`X-Partner-Code`.
 
 | # | Endpoint | Method | Member token? | Idempotency? | Purpose | EARN | BURN |
 |---|----------|--------|---------------|--------------|---------|------|------|
 | 1 | `/programs`, `/programs/{code}` | GET | — | — | Catalog + capability descriptor | ✅ | ✅ |
-| 2 | `/auth/member-context` | POST | — | — | Establish member context (once) | (1) | ✅ |
+| 2 | `/auth/member-context` | POST | — | — | Establish member context (once) | ✅ | ✅ |
 | 3 | `/members/{ref}/balance` | GET | ✅ | — | Member balance & eligibility | ✅ | ✅ |
 | 4 | `/redemptions/quote` | POST | ✅ | — | Cost, balance, `oneClickEligible`, next step | — | ✅ |
-| 5 | `/accruals` | POST | (1) | ✅ | **Earn** points | ✅ | — |
-| 6 | `/redemptions` | POST | ✅ | ✅ | **Burn** points | — | ✅ |
-| 7 | `/redemptions/{operationReference}/otp` | POST | ✅ | ✅ | Submit OTP (SAS always, Etihad if configured) | — | (2) |
-| 8 | `/redemptions/{operationReference}`, `/accruals/{operationReference}` | GET | — | — | Status / lifecycle (resolves M&M two-phase) | ✅ | ✅ |
+| 5 | `/accruals` | POST | if login | ✅ | Earn points | ✅ | — |
+| 6 | `/redemptions` | POST | ✅ | ✅ | Burn points | — | ✅ |
+| 7 | `/redemptions/{operationReference}/otp` | POST | ✅ | ✅ | Submit OTP for a burn | — | ✅ |
+| 8 | `/redemptions/{operationReference}`, `/accruals/{operationReference}` | GET | — | — | Status / lifecycle (resolves two-phase burns) | ✅ | ✅ |
 | 9 | `/accruals/{operationReference}/reverse`, `/redemptions/{operationReference}/reverse` | POST | — | ✅ | Reverse the points leg (full or partial) | ✅ | ✅ |
 | 10 | `/redemptions?from=&to=` , `/accruals?from=&to=` | GET | — | — | List/query for reconciliation | ✅ | ✅ |
 | 11 | Webhooks (signed JWT) | — | — | — | `member-context.ready` + settled-state notifications | ✅ | ✅ |
 
-> **(1)** Member context is required for earn only if the program mandates login for earn. Otherwise
-> earn is server-to-server with the member id. **(2)** Only when the program demands OTP.
+---
+
+## 5. Example A: Burn
+
+Burn points to pay for part or all of an order. The member signs in once, then follow the runtime
+`nextStep` until the burn is `REDEEMED`.
+
+Quote (optional pre-flight). `POST /redemptions/quote` returns the point cost, balance,
+`oneClickEligible`, a `quoteRef` and the `nextStep` (§2 explains each value; a burn can chain steps,
+e.g. SAS returns a redirect then an OTP). Echo `quoteRef` on the burn to pin pricing. A stale quote
+returns `422`.
+
+```text
+   Client                                     Pointspay /loyalty/v1
+        │  1. Establish member context (once) ──────>│  { READY, memberRef, memberToken }
+        │<───────────────────────────────────────────│
+        │  2. Quote (optional pre-flight) ──────────>│  { quoteRef, oneClickEligible, nextStep }
+        │<───────────────────────────────────────────│
+        │  3. Burn  POST /redemptions ──────────────>│
+        │     Follow nextStep until 200 REDEEMED:     │
+        │        · BURN_NOW          → done in one call
+        │        · REDIRECT_REQUIRED → member → redirectUrl, then re-check status
+        │        · OTP_REQUIRED      → POST /{opRef}/otp
+        │     SAS chains REDIRECT_REQUIRED then OTP_REQUIRED
+        │<───────────────────────────────────────────│
+```
+
+Burn request
+
+```bash
+curl -X POST https://api.pointspay.com/loyalty/v1/redemptions \
+  -H "X-API-Key: $POINTSPAY_API_KEY" -H "X-Partner-Code: acme-travel" \
+  -H "X-Member-Token: $MEMBER_TOKEN" \
+  -H "X-Idempotency-Key: 7a2d-burn-0002-ord-789" \
+  -H "Content-Type: application/json" \
+  -d '{ "programCode": "ETH", "memberRef": "mbr_ETH_77x", "points": 12000, "quoteRef": "q_ETH_abc", "partnerReference": "ORD-2026-0099887" }'
+```
+
+One-click response (`BURN_NOW`) `200 OK`
+
+```json
+{ "operationReference": "op_ETH_5b21", "programCode": "ETH", "status": "REDEEMED", "points": 12000, "balanceAfter": 36500, "reversedPoints": 0, "verification": null }
+```
+
+When the program needs a step, the same call returns `202` with a `verification` and the next `nextStep`.
+
+Redirect response (FLB, MAM) `202 Accepted`
+
+```json
+{
+  "operationReference": "op_FLB_7e88", "programCode": "FLB", "status": "PENDING_VERIFICATION", "nextStep": "REDIRECT_REQUIRED", "points": 12000,
+  "verification": { "type": "EXTERNAL_REDIRECT", "redirectUrl": "https://api.pointspay.com/loyalty/v1/redemptions/op_FLB_7e88/redirect" }
+}
+```
+
+Send the member to `redirectUrl`, then re-check status by polling `GET /redemptions/op_FLB_7e88` or the
+[webhook](#9-webhooks-signed-jwt).
+
+Redirect + OTP response (SAS) `202 Accepted`
+
+SAS needs both. The burn returns the redirect first:
+
+```json
+{
+  "operationReference": "op_SAS_9c40", "programCode": "SAS", "status": "PENDING_VERIFICATION", "nextStep": "REDIRECT_REQUIRED", "points": 9000,
+  "verification": { "type": "EXTERNAL_REDIRECT", "redirectUrl": "https://api.pointspay.com/loyalty/v1/redemptions/op_SAS_9c40/redirect" }
+}
+```
+
+After the member returns from the redirect, the same operation advances to an OTP:
+
+```json
+// GET /redemptions/op_SAS_9c40 (or the webhook) now returns:
+{ "operationReference": "op_SAS_9c40", "status": "PENDING_VERIFICATION", "nextStep": "OTP_REQUIRED",
+  "verification": { "type": "OTP_CHALLENGE", "otpReceiver": "+46 70 *  12", "otpExpiresAt": "2026-06-30T12:10:00Z" } }
+```
+
+Submit the OTP to finish:
+
+```bash
+curl -X POST https://api.pointspay.com/loyalty/v1/redemptions/op_SAS_9c40/otp \
+  -H "X-API-Key: $POINTSPAY_API_KEY" -H "X-Partner-Code: acme-travel" \
+  -H "X-Member-Token: $MEMBER_TOKEN" -H "X-Idempotency-Key: 7a2d-otp-0003" \
+  -H "Content-Type: application/json" -d '{ "otpCode": "482913" }'
+# → 200 { "operationReference": "op_SAS_9c40", "status": "REDEEMED", "balanceAfter": 22000 }
+```
 
 ---
 
-## 7. Example A: Earn
+## 6. Example B: Earn
 
-Earn (accrue) points for a member with a single server-to-server call. The member authenticated once
-(or, for programs that allow earn without login, just the member id is passed).
+Earn (accrue) points for a member with a single server-to-server call.
 
 ```text
    Client                                     Pointspay /loyalty/v1
@@ -298,7 +290,7 @@ Earn (accrue) points for a member with a single server-to-server call. The membe
         │<───────────────────────────────────────────│
 ```
 
-**Request**
+Request
 
 ```bash
 curl -X POST https://api.pointspay.com/loyalty/v1/accruals \
@@ -315,7 +307,12 @@ curl -X POST https://api.pointspay.com/loyalty/v1/accruals \
       }'
 ```
 
-**Response** `200 OK`
+> Earn without member login. When the program's descriptor has `earnRequiresMemberLogin: false`,
+> omit the `X-Member-Token` header and identify the member by `memberRef` in the body (the call above,
+> minus that one header). When it is `true`, establish a member context first (step 1) and send the
+> token as shown.
+
+Response `200 OK`
 
 ```json
 {
@@ -336,153 +333,75 @@ curl -X POST https://api.pointspay.com/loyalty/v1/accruals \
 
 ---
 
-## 8. Example B: Burn
+## 7. Example C: Earn and Burn Together (Split)
 
-Burn points to pay for (part of) an order (Scenario 3, full burn). The member logs in **once**, then
-the burn follows the program's `burnStep`.
-
-**Quote (optional pre-flight).** `POST /redemptions/quote` returns the point cost, balance,
-`oneClickEligible`, the concrete `nextStep` (`BURN_NOW` / `OTP_REQUIRED` / `REDIRECT_REQUIRED` /
-`AUTH_REQUIRED`), and a `quoteRef`. Echo `quoteRef` on the burn to pin pricing and eligibility. A
-stale quote returns `422`.
+The flagship: within one member context, the member burns points on one leg and earns
+points on another. Both legs run under the same member token, so the member signs in only once.
 
 ```text
-   Client                                     Pointspay /loyalty/v1
-        │  1. Establish member context (once) ──────>│  { READY, memberRef, memberToken }
-        │<───────────────────────────────────────────│
-        │  2. Quote (optional pre-flight) ──────────>│  { quoteRef, oneClickEligible, nextStep }
-        │<───────────────────────────────────────────│
-        │  3. Burn  POST /redemptions ──────────────>│
-        │     200 REDEEMED      ── FLB / Etihad(OTP-off): one-click, done
-        │     202 PENDING_VERIFICATION:               │
-        │        · OTP_CHALLENGE   → POST /{opRef}/otp → 200 REDEEMED   (SAS, Etihad OTP-on)
-        │        · EXTERNAL_REDIRECT → user→MCheckout → GET /{opRef}    (M&M)
-        │<───────────────────────────────────────────│
-```
-
-**Burn request**
-
-```bash
-curl -X POST https://api.pointspay.com/loyalty/v1/redemptions \
-  -H "X-API-Key: $POINTSPAY_API_KEY" -H "X-Partner-Code: acme-travel" \
-  -H "X-Member-Token: $MEMBER_TOKEN" \
-  -H "X-Idempotency-Key: 7a2d-burn-0002-ord-789" \
-  -H "Content-Type: application/json" \
-  -d '{ "programCode": "FLB", "memberRef": "mbr_FLB_77x", "points": 12000, "quoteRef": "q_FLB_abc", "partnerReference": "ORD-2026-0099887" }'
-```
-
-**One-click response** (Flying Blue / Etihad OTP-off) `200 OK`
-
-```json
-{ "operationReference": "op_FLB_5b21", "programCode": "FLB", "status": "REDEEMED", "points": 12000, "balanceAfter": 36500, "reversedPoints": 0, "verification": null }
-```
-
-**OTP response** (SAS, or Etihad with OTP on) `202 Accepted`
-
-```json
-{
-  "operationReference": "op_SAS_9c40", "programCode": "SAS", "status": "PENDING_VERIFICATION", "points": 9000,
-  "verification": { "type": "OTP_CHALLENGE", "otpReceiver": "+46 70 *** ** 12", "otpExpiresAt": "2026-06-30T12:10:00Z" }
-}
-```
-
-```bash
-# Submit the code the member received
-curl -X POST https://api.pointspay.com/loyalty/v1/redemptions/op_SAS_9c40/otp \
-  -H "X-API-Key: $POINTSPAY_API_KEY" -H "X-Partner-Code: acme-travel" \
-  -H "X-Member-Token: $MEMBER_TOKEN" -H "X-Idempotency-Key: 7a2d-otp-0003" \
-  -H "Content-Type: application/json" -d '{ "otpCode": "482913" }'
-# → 200 { "operationReference": "op_SAS_9c40", "status": "REDEEMED", "balanceAfter": 22000 }
-```
-
-**Redirect response** (Miles & More) `202 Accepted`
-
-```json
-{
-  "operationReference": "op_MAM_7e88", "programCode": "MAM", "status": "PENDING_VERIFICATION", "points": 15000,
-  "verification": { "type": "EXTERNAL_REDIRECT", "redirectUrl": "https://mcheckout.miles-and-more.com/checkout/op_MAM_7e88" }
-}
-```
-
-Send the member's browser to `redirectUrl`. Resolve the terminal state by polling
-`GET /redemptions/op_MAM_7e88` or by awaiting the [webhook](#11-webhooks-signed-jwt).
-
----
-
-## 9. Example C: Earn and Burn Together (Split)
-
-The flagship: the member burns points for part of the order **and** earns on the cash part, within
-**one** member context (Scenario 2). The cash leg is sequenced between the two Pointspay calls.
-
-```text
-   Client                        Pointspay /loyalty/v1        PSP / card
+   Client                          Pointspay /loyalty/v1
         │ 1. member-context (ONCE) ───>│  { memberRef, memberToken }
-        │<─────────────────────────────│                          │
-        │ 2. quote (burn 2000) ───────>│  { quoteRef, oneClickEligible } │
-        │<─────────────────────────────│                          │
-        │ 3. BURN 2000 pts ───────────>│  200 REDEEMED  op=op_burn │      ← points leg
-        │<─────────────────────────────│                          │
-        │ 4. Charge €60.00 cash ─────────────────────────────────>│      ← cash leg (separate)
-        │<─────────────────────────────────────────────────────────│
-        │ 5. EARN-BACK 300 pts ───────>│  200 ACCRUED   op=acc_back│      ← earn leg, SAME member token
-        │<─────────────────────────────│                          │
-        │ 6. Order complete            │                          │
+        │<─────────────────────────────│
+        │ 2. quote (burn 2000) ───────>│  { quoteRef, oneClickEligible }
+        │<─────────────────────────────│
+        │ 3. BURN 2000 pts ───────────>│  200 REDEEMED  op=op_burn   ← points leg
+        │<─────────────────────────────│
+        │ 4. EARN 300 pts ────────────>│  200 ACCRUED   op=acc_back  ← earn leg, SAME token
+        │<─────────────────────────────│
+        │ 5. Order complete            │
 ```
 
-**Step 1. Establish the member context:**
+Step 1. Establish the member context:
 
 ```bash
 curl -X POST https://api.pointspay.com/loyalty/v1/auth/member-context \
   -H "X-API-Key: $POINTSPAY_API_KEY" -H "X-Partner-Code: acme-travel" \
   -H "Content-Type: application/json" \
-  -d '{ "programCode": "FLB" }'
-# → { "nextStep": "READY", "memberRef": "mbr_FLB_77x", "memberToken": "<MEMBER_TOKEN>", ... }
+  -d '{ "programCode": "ETH" }'
+# → { "nextStep": "READY", "memberRef": "mbr_ETH_77x", "memberToken": "<MEMBER_TOKEN>", ... }
 ```
 
-**Step 3. Burn the points leg** (`X-Member-Token` = the token from step 1):
+Step 3. Burn the points leg (`X-Member-Token` = the token from step 1):
 
 ```bash
 curl -X POST https://api.pointspay.com/loyalty/v1/redemptions \
   -H "X-API-Key: $POINTSPAY_API_KEY" -H "X-Partner-Code: acme-travel" \
   -H "X-Member-Token: $MEMBER_TOKEN" -H "X-Idempotency-Key: split-burn-ord-790" \
   -H "Content-Type: application/json" \
-  -d '{ "programCode": "FLB", "memberRef": "mbr_FLB_77x", "points": 2000, "partnerReference": "ORD-2026-0100100" }'
+  -d '{ "programCode": "ETH", "memberRef": "mbr_ETH_77x", "points": 2000, "partnerReference": "ORD-2026-0100100" }'
 # → 200 { "operationReference": "op_burn_3f", "status": "REDEEMED", "balanceAfter": 46500 }
 ```
 
-**Step 4. Charge €60.00 on the card** (handled by the PSP, not Pointspay).
-
-**Step 5. Earn-back on the cash part, *same* member token, no second login:**
+Step 4. Earn-back, *same* member token, no second login:
 
 ```bash
 curl -X POST https://api.pointspay.com/loyalty/v1/accruals \
   -H "X-API-Key: $POINTSPAY_API_KEY" -H "X-Partner-Code: acme-travel" \
   -H "X-Member-Token: $MEMBER_TOKEN" -H "X-Idempotency-Key: split-earn-ord-790" \
   -H "Content-Type: application/json" \
-  -d '{ "programCode": "FLB", "memberRef": "mbr_FLB_77x", "points": 300, "partnerReference": "ORD-2026-0100100", "relatedOperationReference": "op_burn_3f" }'
+  -d '{ "programCode": "ETH", "memberRef": "mbr_ETH_77x", "points": 300, "partnerReference": "ORD-2026-0100100", "relatedOperationReference": "op_burn_3f" }'
 # → 200 { "operationReference": "acc_back_9a", "status": "ACCRUED", "balanceAfter": 46800 }
 ```
 
-**Orchestration and failure handling** (the client sequences the three legs):
+Failure handling (the client sequences the two legs):
 
 | Failure point | Recommended action |
 |---------------|--------------------|
-| **Burn fails** | Do not charge the card. Surface the error to the user. |
-| **Card charge fails** (after burn) | Call `POST /redemptions/{op_burn}/reverse` to return the points, and cancel the order. |
-| **Earn-back fails** (after burn + charge) | Complete the order (the user has their reservation). Retry the accrual. It is idempotent on `X-Idempotency-Key`. |
+| Burn fails | Surface the error to the user. Do not proceed. |
+| Earn-back fails (after burn) | The burn stands. Retry the accrual. It is idempotent on `X-Idempotency-Key`. |
 
-> Both legs ran under the **one** member token from step 1. The member authenticated exactly once.
-> The only time an extra step appears is if the program demands a per-burn OTP/redirect (§3).
+> Both legs ran under the one member token from step 1. The member authenticated exactly once.
+> The only time an extra step appears is if the program demands a per-burn OTP/redirect (§1).
 
 ---
 
-## 10. Status Lifecycle
+## 8. Status Lifecycle
 
 Every earn and burn carries a `status`. Read the current state from
 `GET /redemptions/{operationReference}` or `GET /accruals/{operationReference}`, or receive it via
-webhook (§11).
+webhook (§9).
 
-**Burn (redemption) statuses**
+Burn (redemption) statuses
 
 | Status | Meaning | Terminal |
 |--------|---------|----------|
@@ -494,7 +413,7 @@ webhook (§11).
 | `REVERSAL_PENDING` / `REVERSAL_FAILED` | A reversal is in progress / a reversal failed. | — |
 | `EXPIRED` | A pending verification timed out. | ✅ |
 
-**Earn (accrual) statuses**
+Earn (accrual) statuses
 
 | Status | Meaning | Terminal |
 |--------|---------|----------|
@@ -504,7 +423,7 @@ webhook (§11).
 | `REVERSED` | All earned points clawed back. | ✅ |
 | `REVERSAL_PENDING` / `REVERSAL_FAILED` | In progress / failed. | — |
 
-**Tracking (partial) reversals.** Each operation exposes the same shape as the V5 transaction status:
+Tracking (partial) reversals. Each operation exposes the same shape as the V5 transaction status:
 
 | Field | Meaning | V5 equivalent |
 |-------|---------|---------------|
@@ -514,33 +433,33 @@ webhook (§11).
 | `statusUpdates[]` | `timestamp`, `message`, `source` (`LOYALTY`/`INTERNAL`) for progress/error notes. | `status_updates[]` |
 
 `status` follows `reversedPoints`: `0` means `REDEEMED`/`ACCRUED`, `0 < reversedPoints < points` means
-`PARTIALLY_REVERSED`, and `== points` means `REVERSED`. Poll the operation (or a specific
+`PARTIALLY_REVERSED` and `== points` means `REVERSED`. Poll the operation (or a specific
 `reversalReference`) until each reversal settles (`PENDING → SUCCESS | FAILED`).
 
 ---
 
-## 11. Webhooks (Signed JWT)
+## 9. Webhooks (Signed JWT)
 
-Pointspay POSTs **signed JWTs (compact JWS)** to your registered webhook URL. Two event families,
+Pointspay POSTs signed JWTs (compact JWS) to your registered webhook URL. Two event families,
 both verified the same way:
 
-- **`member-context.ready`**: sent after a redirect auth completes. Carries the `memberToken` and
-  `memberRef` to your backend (the push alternative to `POST .../token`, §5.2).
-- **operation settled-state**: sent when an earn/burn settles (`REDEEMED`, `REDEMPTION_FAILED`,
+- `member-context.ready`: sent after a redirect auth completes. Carries the `memberToken` and
+  `memberRef` to your backend (the push alternative to `POST .../token`, §3.2).
+- operation settled-state: sent when an earn/burn settles (`REDEEMED`, `REDEMPTION_FAILED`,
   `ACCRUED`, `ACCRUAL_FAILED`, `PARTIALLY_REVERSED`, `REVERSED`, `REVERSAL_FAILED`, `EXPIRED`).
 
-**Verify exactly like Pointspay payment tokens**: standard JWT/JWKS verification per
-[jwt.io](https://jwt.io) / RFC 7519, with ready-made code for Node.js, Python, PHP, and Java in
+Verify exactly like Pointspay payment tokens: standard JWT/JWKS verification per
+[jwt.io](https://jwt.io) / RFC 7519, with ready-made code for Node.js, Python, PHP and Java in
 [`JWT_SIGNATURE_VERIFICATION.md`](./JWT_SIGNATURE_VERIFICATION.md). The only loyalty-specific values:
 
 | | Value |
 |---|---|
-| Issuer (`iss`) | `https://api.pointspay.com/loyalty/v1`. **Distinct** from the payment issuer (`…/v4`), so loyalty key rotation is isolated. Verify exactly. |
+| Issuer (`iss`) | `https://api.pointspay.com/loyalty/v1`. Distinct from the payment issuer (`…/v4`), so loyalty key rotation is isolated. Verify exactly. |
 | JWKS | `https://api.pointspay.com/loyalty/v1/.well-known/jwks.json` (via OIDC discovery). Pick the key by `kid` from the JWS header. |
 | Algorithms | `RS256` / `RS384` / `RS512` (whitelist these three, reject `alg: none`). |
 | Audience (`aud`) | your partner code. |
 
-**Claim fields**, compact keys following the same convention as Pointspay payment tokens (e.g. V5's
+Claim fields, compact keys following the same convention as Pointspay payment tokens (e.g. V5's
 `stat` / `oid`):
 
 | Claim | Meaning |
@@ -550,8 +469,8 @@ both verified the same way:
 | `evt` | Event type: `operation.settled` or `member-context.ready`. |
 | `opr` | Operation reference: the earn/burn this event is about. |
 | `knd` | Operation kind: `EARN` or `BURN`. |
-| `prg` | Program code: `FLB` / `ETHWL` / `SAS` / `MAM`. |
-| `stat` | Settled status (see §10). |
+| `prg` | Program code (e.g. `FLB`, `ETH`), as returned by `GET /programs`. |
+| `stat` | Settled status (see §8). |
 | `pts`, `rpts` | Points (original) and reversed points (cumulative). |
 | `pref` | Partner reference (your order reference). |
 | `oat` | When the change occurred. |
@@ -567,16 +486,16 @@ both verified the same way:
 ```
 
 The `member-context.ready` event instead carries `ctx` (context ref), `mrf` (member ref), `mtk`
-(member token), and `prg`. Respond `2xx` to acknowledge. Pointspay retries with backoff on any non-2xx.
+(member token) and `prg`. Respond `2xx` to acknowledge. Pointspay retries with backoff on any non-2xx.
 
 ---
 
-## 12. Reversals & Refunds
+## 10. Reversals & Refunds
 
-Reversals are initiated via the partner key, with **no member interaction**, and may be **full or
-partial**.
+Reversals are initiated via the partner key, with no member interaction and may be full or
+partial.
 
-**Full reversal** (omit `points` to reverse the full remaining amount):
+Full reversal (omit `points` to reverse the full remaining amount):
 
 ```bash
 curl -X POST https://api.pointspay.com/loyalty/v1/redemptions/op_burn_3f/reverse \
@@ -586,8 +505,8 @@ curl -X POST https://api.pointspay.com/loyalty/v1/redemptions/op_burn_3f/reverse
 # → 200 { "operationReference": "op_burn_3f", "status": "REVERSED", "points": 2000, "reversedPoints": 2000, ... }
 ```
 
-**Partial reversal** mirrors a partial refund by reversing only the affected share. Partials
-accumulate up to the original, and the operation sits at `PARTIALLY_REVERSED` until fully reversed:
+Partial reversal mirrors a partial refund by reversing only the affected share. Partials
+accumulate up to the original and the operation sits at `PARTIALLY_REVERSED` until fully reversed:
 
 ```bash
 # return 800 of 2000 burned points (e.g. 1 of 3 nights refunded)
@@ -614,20 +533,20 @@ A later reversal of the remaining 1200 points moves `status` to `REVERSED` (`rev
 
 | Rule | Detail |
 |------|--------|
-| **Points only** | Reverses the points leg. **Any fiat refund (full or partial) is handled outside this API**, matched to the points reversal by `partnerReference` / `operationReference`. |
-| **Partial** | Supply `points` no greater than the remaining amount (`points − reversedPoints`). Multiple partials accumulate, and `status` stays `PARTIALLY_REVERSED` until fully reversed (see §10). |
-| **Both directions** | `…/redemptions/{op}/reverse` returns burned points. `…/accruals/{op}/reverse` claws back earned points. |
-| **Idempotent** | Each call is idempotent on `X-Idempotency-Key`, so a retry never double-reverses. |
-| **Program-dependent** | The reverse path exists for all four programs. Per-program reversibility and any time window are confirmed in the partnership SLA. A non-reversible case returns `422`. |
+| Points only | Reverses the points leg. Any fiat refund (full or partial) is handled outside this API, matched to the points reversal by `partnerReference` / `operationReference`. |
+| Partial | Supply `points` no greater than the remaining amount (`points − reversedPoints`). Multiple partials accumulate and `status` stays `PARTIALLY_REVERSED` until fully reversed (see §8). |
+| Both directions | `…/redemptions/{op}/reverse` returns burned points. `…/accruals/{op}/reverse` claws back earned points. |
+| Idempotent | Each call is idempotent on `X-Idempotency-Key`, so a retry never double-reverses. |
+| Program-dependent | The reverse path exists for every program. Per-program reversibility and any time window are exposed in the capability descriptor (`reversible`, `reversalWindowDays`) and confirmed in the partnership SLA. A non-reversible case returns `422`. |
 
 For a split refund, reverse the burn and the earn-back independently by their `operationReference`s.
 Each can itself be partial.
 
 ---
 
-## 13. Errors & Idempotency
+## 11. Errors & Idempotency
 
-**Error model.** Every error is `{code, message, key}`:
+Error model. Every error is `{code, message, key}`:
 
 ```json
 { "code": "LOYALTY_INSUFFICIENT_BALANCE", "message": "Member balance is insufficient for the requested redemption.", "key": "loyalty.redemption.insufficient_balance", "traceId": "…" }
@@ -635,33 +554,33 @@ Each can itself be partial.
 
 Switch on `code`. Localize via `key`. Quote `traceId` to support.
 
-**Idempotency.** Required on every mutating call (`/accruals`, `/redemptions`, `…/otp`, `…/reverse`)
-via the **`X-Idempotency-Key`** header (at least 16 chars):
+Idempotency. Required on every mutating call (`/accruals`, `/redemptions`, `…/otp`, `…/reverse`)
+via the `X-Idempotency-Key` header (at least 16 chars):
 
 | Situation | Result |
 |-----------|--------|
-| Same key, **same body** | The **cached original response** is returned (safe to retry). |
-| Same key, **different body** | `409 Conflict`. |
-| Key **still processing** | `425 Too Early` (honor `Retry-After`). |
+| Same key, same body | The cached original response is returned (safe to retry). |
+| Same key, different body | `409 Conflict`. |
+| Key still processing | `425 Too Early` (honor `Retry-After`). |
 
-Keys are unique per partner, retained 24h, and SHA-256-bound to the request body. This makes the
-irreversible burn safe to retry over flaky networks **without double-spending** a member's points.
+Keys are unique per partner, retained 24h and SHA-256-bound to the request body. This makes the
+irreversible burn safe to retry over flaky networks without double-spending a member's points.
 
 ---
 
-## 14. Onboarding Checklist
+## 12. Onboarding Checklist
 
 | # | Item | Description | Provided? |
 |---|------|-------------|-----------|
-| 1 | **API key** | `X-API-Key` (partner auth) | ☐ |
-| 2 | **Partner code** | `X-Partner-Code` identifier | ☐ |
-| 3 | **Scopes** | `loyalty.read` / `loyalty.earn` / `loyalty.burn` / `loyalty.reverse` (least privilege) | ☐ |
-| 4 | **mTLS certificate** (optional, prod) | Client cert for production hardening | ☐ |
-| 5 | **Webhook URL** | HTTPS endpoint for `member-context.ready` and settled-state signed-JWT events | ☐ |
-| 6 | **Programs** | Which of FLB / ETHWL / SAS / MAM to enable | ☐ |
-| 7 | **Redirect completion URL** (optional) | App-claimed link for browser return after a member-context redirect | ☐ |
-| 8 | **Sandbox access** | UAT base URL and test member accounts with known balances | ☐ |
-| 9 | **End-to-end test** | member-context → quote → burn → earn-back → partial reverse → full reverse, webhook verified | ☐ |
+| 1 | API key | `X-API-Key` (partner auth) | ☐ |
+| 2 | Partner code | `X-Partner-Code` identifier | ☐ |
+| 3 | Scopes | `loyalty.read` / `loyalty.earn` / `loyalty.burn` / `loyalty.reverse` (least privilege) | ☐ |
+| 4 | mTLS certificate (optional, prod) | Client cert for production hardening | ☐ |
+| 5 | Webhook URL | HTTPS endpoint for `member-context.ready` and settled-state signed-JWT events | ☐ |
+| 6 | Programs | Which programs to enable (from the `GET /programs` catalog) | ☐ |
+| 7 | Redirect completion URL (optional) | App-claimed link for browser return after a member-context redirect | ☐ |
+| 8 | Sandbox access | UAT base URL and test member accounts with known balances | ☐ |
+| 9 | End-to-end test | member-context → quote → burn → earn-back → partial reverse → full reverse, webhook verified | ☐ |
 
 ---
 
