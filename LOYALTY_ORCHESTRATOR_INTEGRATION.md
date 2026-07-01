@@ -4,6 +4,20 @@
 > endpoints described below are **not callable yet**. Sandbox and production availability will be
 > announced. This guide is shared for early integration planning and feedback, not for live use.
 
+**At a glance.** `/loyalty/v1` lets you **earn and burn loyalty points across four airline programs**
+(Flying Blue, Etihad Guest, SAS EuroBonus, Miles & More) through one API, in three flows: **earn**
+(accrue on a cash order), **burn** (redeem for part or all), and **split** (both on one order). It
+**moves points, not money** (you keep the cash leg) and carries no cardholder data, so it adds no PCI
+scope.
+
+| | |
+|---|---|
+| **Base URL (prod)** | `https://api.pointspay.com/loyalty/v1` |
+| **Base URL (sandbox)** | `https://uat-api.pointspay.com/loyalty/v1` |
+| **Partner auth** | `X-API-Key` plus `X-Partner-Code` (optional mTLS in production) |
+| **Member auth** | `X-Member-Token` from a one-time member context, on member-scoped calls |
+| **Format** | JSON. Integer point amounts. `{code, message, key}` error model |
+
 ---
 
 ## Table of Contents
@@ -29,26 +43,11 @@
 
 ## 1. Overview
 
-`/loyalty/v1` is a REST API to **earn and burn loyalty points across four airline programs through
-one contract**: Flying Blue (`FLB`), Etihad Guest (`ETHWL`), SAS EuroBonus (`SAS`), and Miles & More
-(`MAM`). It exposes each program's authentication and redemption behaviour through one uniform
-interface, and supports **earn** (accrue), **burn** (redeem), **split** (earn plus burn on one
-order), full or partial reversal, status query, reconciliation, and signed-JWT webhooks.
-
-**This API moves points, not money.** The cash leg is processed outside it, and no cardholder data
-traverses `/loyalty/v1` (it adds no PCI scope).
-
-| | |
-|---|---|
-| **Base URL (prod)** | `https://api.pointspay.com/loyalty/v1` |
-| **Base URL (sandbox)** | `https://uat-api.pointspay.com/loyalty/v1` |
-| **Partner auth** | `X-API-Key` plus `X-Partner-Code` (optional mTLS in production) |
-| **Member auth** | `X-Member-Token` from a one-time member context, on member-scoped calls |
-| **Format** | JSON. Integer point amounts. `{code, message, key}` error model |
-
-> **Maturity.** Per-program *behaviours* in this guide (earn, no-redirect burn, OTP, redirect) are
-> verified against Pointspay's production loyalty integrations. The `/loyalty/v1` surface is defined by
-> this guide and the OpenAPI contract. Sandbox availability is delivered on a mutually agreed schedule.
+Beyond earn, burn, and split, the API covers program discovery, one-time member authentication,
+balance, quote, full or partial **reversal**, **status** query, a **reconciliation** list, and
+signed-JWT **webhooks**. Per-program behaviours in this guide are verified against Pointspay's
+production loyalty integrations. The `/loyalty/v1` surface is defined by this guide and the OpenAPI
+contract.
 
 ---
 
@@ -117,17 +116,19 @@ A member is **not** logged in twice. One consent covers the whole transaction. E
    └────────────────┘  └────────────────────┘
 ```
 
-The single login establishes a **member context** (§5.2) that is reused for many operations,
-including both legs of a split, so the earn-back never triggers a second login. See
-[Example C](#9-example-c-earn-and-burn-together-split).
+The single login establishes a **member context** (§5.2) reused for the whole transaction, including
+both legs of a split. See [Example C](#9-example-c-earn-and-burn-together-split).
 
 ---
 
 ## 4. Per-Program Capability
 
-Capability uses **two orthogonal axes plus one derived flag**, because a single label can't capture
-the central nuance: *a program can need a redirect to authenticate but no redirect to burn.* Query it
+**Every program needs one member login. After that, burns are one-click except where the program
+mandates an OTP (SAS always, Etihad if configured) or a redirect (Miles & More).** Nothing is
+hard-coded: `quote` returns `oneClickEligible` and the concrete next step per member. Query capability
 at `GET /loyalty/v1/programs`.
+
+Capability uses two orthogonal axes plus a derived flag:
 
 - **`authMode`**: how member context is established, once. `MEMBER_OAUTH_REDIRECT`,
   `MEMBER_SAML_SSO`, or `B2B_MACHINE_TOKEN`.
@@ -146,17 +147,13 @@ at `GET /loyalty/v1/programs`.
 ¹ Etihad's per-burn OTP is governed by that program's configuration. The capability descriptor flags
 this with `burnStepConditional: true`, and a member's **quote** always returns the concrete answer.
 
-No program is zero-redirect for a brand-new member. Each needs a one-time login. After that: Flying
-Blue and Etihad burn server-side with no redirect (Etihad subject to its OTP config). SAS challenges
-an OTP every burn. Miles & More needs a per-transaction MCheckout redirect. This is never hard-coded.
-`quote` returns `oneClickEligible` and the concrete next step per member.
-
 ---
 
 ## 5. Authentication (Two Layers)
 
-There are **two independent layers**. Keeping them separate is why a member is never logged in twice:
-the partner layer has **no user**, and the member layer logs the user in **once** (per §3).
+You build one thing: a static API key. Pointspay hides each program's OAuth, SAML, and token login
+behind one endpoint, and the member logs in only once. This works because there are **two independent
+layers**: the partner layer has **no user**, and the member layer logs the user in **once** (per §3).
 
 ```text
    ┌─────────────────────────────────────────────────────────────┐
@@ -176,12 +173,13 @@ the partner layer has **no user**, and the member layer logs the user in **once*
 
 ### 5.1 Partner Authentication
 
-The client authenticates to `/loyalty/v1` with a **static API key**, the same model as Pointspay's
-existing public API, so there is nothing new to build:
+The client authenticates with a **static API key**, the same model as Pointspay's existing public
+API, so there is nothing new to build. The key carries its scopes (`loyalty.read` / `loyalty.earn` /
+`loyalty.burn` / `loyalty.reverse`) and is redacted from logs. Store it as a server secret.
 
 | Header | Value |
 |--------|-------|
-| `X-API-Key` | Secret API key (issued at onboarding). **Never exposed to the browser.** |
+| `X-API-Key` | Secret API key (issued at onboarding). Never exposed to the browser. |
 | `X-Partner-Code` | Partner identifier (the audience the key is scoped to). |
 
 ```bash
@@ -189,17 +187,6 @@ curl https://api.pointspay.com/loyalty/v1/programs \
   -H "X-API-Key: $POINTSPAY_API_KEY" \
   -H "X-Partner-Code: acme-travel"
 ```
-
-**Key points**
-
-- This authenticates the **calling server**, not a user. There is **no OAuth dance and no login
-  screen** at this layer. The key is presented on every call and reused indefinitely.
-- The key carries its **scopes** (`loyalty.read`, `loyalty.earn`, `loyalty.burn`, `loyalty.reverse`),
-  set at onboarding (least privilege).
-- **Production hardening (optional):** present a **client certificate (mTLS)** alongside the key.
-  Recommended for production given the irreversibility of burns. Not required in sandbox.
-- The key is **redacted** from Pointspay logs and error output. Store it as a server secret, and
-  rotate it via the onboarding contact.
 
 ### 5.2 Member Context
 
@@ -227,18 +214,13 @@ The response is one of two shapes:
 
 #### Completing a redirect: how the client knows the user is back
 
-Open `redirectUrl` in a web-view, in-app browser tab (iOS `ASWebAuthenticationSession`, Android
-Custom Tabs), or the system browser. The member authenticates. Pointspay completes the program's
-OAuth/SAML exchange **server-side**, mints the member token, and marks the context `READY`.
+Open `redirectUrl` in a web-view, in-app browser tab, or the system browser. The member
+authenticates. Pointspay completes the OAuth/SAML exchange **server-side**, mints the member token,
+and marks the context `READY`.
 
-`redirectCompletionUrl` is **optional**:
-
-- **Provide it** if you want the member's browser sent back to a link your app claims (mechanism A
-  below). Pointspay 302-redirects there with `?contextRef=…&status=completed` on completion.
-- **Omit it** to detect completion by polling (B) or by webhook (C). Pointspay then shows a default
-  "you can close this page" screen when the member finishes.
-
-Detect completion (and obtain the token) via any of:
+`redirectCompletionUrl` is **optional**: set it to return the browser to a link your app claims
+(option 1 below), or omit it to detect completion by polling or webhook (options 2 to 3). If omitted,
+Pointspay shows a default "you can close this page" screen.
 
 ```text
    App / web-view                Pointspay                 Program login
@@ -255,32 +237,27 @@ Detect completion (and obtain the token) via any of:
 ```
 
 1. **Deep link / universal link (recommended for mobile).** Set `redirectCompletionUrl` to a link
-   your app claims: an Android App Link / iOS Universal Link, or a custom scheme such as
-   `acme://loyalty/callback`. The OS hands control back to your app, which dismisses the web-view.
+   your app claims (Android App Link / iOS Universal Link, or a custom scheme like
+   `acme://loyalty/callback`). The OS hands control back to your app, which dismisses the web-view.
 2. **Poll (works everywhere, and is the deep-link fallback).** Poll
-   `GET /auth/member-context/{contextRef}` until `status` is `READY` (or `EXPIRED`). Suggested
-   interval about 2 s, with a timeout at `expiresAt`. Most robust for embedded web-views.
+   `GET /auth/member-context/{contextRef}` until `status` is `READY` (or `EXPIRED`), about every 2 s,
+   with a timeout at `expiresAt`. Most robust for embedded web-views.
 3. **`member-context.ready` webhook (push).** A signed JWT sent to your backend carrying the
    `memberToken` and `memberRef` directly (§11). No `POST .../token` call needed.
 
 > **Security: the token never travels through the browser.** The redirect carries only `contextRef`
-> and `status`. The `memberToken` reaches your **backend** only, either as a claim in the signed
-> `member-context.ready` webhook (push) **or** by calling
-> `POST /auth/member-context/{contextRef}/token` over your authenticated partner channel (pull).
-> Either way it stays out of the web-view, URL history, deep-link payloads, and logs. This is the
-> same reason OAuth returns a code, not a token, in the redirect.
+> and `status`. The `memberToken` reaches your backend only, via the signed `member-context.ready`
+> webhook (push) or `POST /auth/member-context/{contextRef}/token` (pull), never the web-view, URL, or
+> logs.
 
-Thereafter the **member token** is presented on member-scoped calls:
-
-| Header | When |
-|--------|------|
-| `X-Member-Token` | On balance, quote, burn, and OTP-submit. Proves the **member session** (separate from the partner key). |
+Thereafter the **member token** is presented on member-scoped calls (`X-Member-Token`): balance,
+quote, burn, and OTP-submit. It proves the **member session**, separate from the partner key.
 
 Member-context endpoints: `GET /auth/member-context/{contextRef}` (status: `PENDING_REDIRECT` /
 `READY` / `EXPIRED`, used for polling above), `POST /auth/member-context/{contextRef}/token` (obtain
-the member token once `READY`, and refresh it later, the pull alternative to the webhook),
-`DELETE …/token` (revoke), and `GET …/introspect` (inspect validity, scope, expiry). **One member
-context is reused for many operations**, including both legs of a split.
+the token once `READY`, and refresh it later), `DELETE …/token` (revoke), and `GET …/introspect`
+(inspect validity, scope, expiry). One member context serves the whole transaction, including both
+legs of a split.
 
 ---
 
@@ -364,13 +341,10 @@ curl -X POST https://api.pointspay.com/loyalty/v1/accruals \
 Burn points to pay for (part of) an order (Scenario 3, full burn). The member logs in **once**, then
 the burn follows the program's `burnStep`.
 
-**What is a quote, and why use it?** `POST /redemptions/quote` is an optional **pre-flight check**.
-For a given member and points amount it returns: the exact points **cost**, the member's **balance**,
-whether the burn is **one-click right now** (`oneClickEligible`), the concrete **`nextStep`**
-(`BURN_NOW` / `OTP_REQUIRED` / `REDIRECT_REQUIRED` / `AUTH_REQUIRED`), and an opaque **`quoteRef`**.
-Use it to (1) show the member the cost and render the right action **before** they commit, and
-(2) echo the `quoteRef` on the burn so pricing and eligibility **can't drift** between quote and burn
-(a stale quote returns `422`). It's optional (you can burn directly) but recommended.
+**Quote (optional pre-flight).** `POST /redemptions/quote` returns the point cost, balance,
+`oneClickEligible`, the concrete `nextStep` (`BURN_NOW` / `OTP_REQUIRED` / `REDIRECT_REQUIRED` /
+`AUTH_REQUIRED`), and a `quoteRef`. Echo `quoteRef` on the burn to pin pricing and eligibility. A
+stale quote returns `422`.
 
 ```text
    Client                                     Pointspay /loyalty/v1
@@ -437,9 +411,8 @@ Send the member's browser to `redirectUrl`. Resolve the terminal state by pollin
 
 ## 9. Example C: Earn and Burn Together (Split)
 
-The flagship: the member burns points for part of the order **and** earns points on the cash part,
-within **one** member context (Scenario 2). **Single login.** The cash leg is sequenced between the
-two Pointspay calls.
+The flagship: the member burns points for part of the order **and** earns on the cash part, within
+**one** member context (Scenario 2). The cash leg is sequenced between the two Pointspay calls.
 
 ```text
    Client                        Pointspay /loyalty/v1        PSP / card
@@ -456,7 +429,7 @@ two Pointspay calls.
         │ 6. Order complete            │                          │
 ```
 
-**Step 1. One member context, reused for both legs:**
+**Step 1. Establish the member context:**
 
 ```bash
 curl -X POST https://api.pointspay.com/loyalty/v1/auth/member-context \
