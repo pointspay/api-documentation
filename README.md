@@ -4,6 +4,19 @@
 
 REST API Reference
 
+---
+
+### Documentation & Guides
+
+This site hosts the following Pointspay integration guides:
+
+- **Payments REST API** (this page) — merchant checkout: payments, refunds, IPN, request/response signatures.
+- **[Loyalty Orchestrator API](./LOYALTY_ORCHESTRATOR_INTEGRATION.md)** — 🚧 **Planned — not yet available.** Earn & burn loyalty points across multiple programs through one API. Draft shared for partner evaluation; endpoints are not callable yet.
+- **[Server-to-Server (S2S) Loyalty Integration](./S2S_INTEGRATION.md)** ([one-pager](./S2S_INTEGRATION_ONEPAGER.md)) — for a loyalty program integrating into Pointspay split payments.
+- **[JWT Signature Verification](./JWT_SIGNATURE_VERIFICATION.md)** — verify Pointspay-issued JWTs and webhooks (Python, JavaScript, PHP, Java).
+
+---
+
 ## 1. Introduction
 
 The target audience of this document is Online Merchants who intend to offer Pointspay as an Alternative Payment Method in their checkout process. The purpose of this document is to guide merchant and partner integrations with the Pointspay REST API.
