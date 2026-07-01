@@ -28,6 +28,7 @@
 | [JWT Signature Verification](JWT_SIGNATURE_VERIFICATION.md) | Language-specific code examples (Python, Java, etc.) for verifying `pp_token` JWTs. |
 | [S2S Integration Guide](S2S_INTEGRATION.md) | Technical guide for loyalty programs integrating their earn/burn endpoints with Pointspay. |
 | [S2S Integration One-Pager](S2S_INTEGRATION_ONEPAGER.md) | Executive overview of the split-payment integration for business stakeholders. |
+| [Loyalty Orchestrator API](LOYALTY_ORCHESTRATOR_INTEGRATION.md) | 🚧 **Planned — not yet available.** Earn & burn loyalty points across multiple programs through one API. Draft for partner evaluation; endpoints are not callable yet. |
 | [Category-Specific Commissions](REST%20API_Category-Specific%20Commission%20Implementation.md) | Appendix for merchants with category-varying commission rates. |
 
 ---
