@@ -1,9 +1,13 @@
 # Pointspay — Loyalty Orchestrator API Integration Guide
 
+> 🚧 **Status: PLANNED — not yet available.** This API is in design and partner evaluation. The
+> endpoints described below are **not callable yet**; sandbox and production availability will be
+> announced. This guide is shared for early integration planning and feedback — not for live use.
+
 > **Audience**: Technical teams integrating the Pointspay Loyalty Orchestrator API to earn and burn
 > loyalty points across multiple programs through one contract.
 > **Direction**: the client calls Pointspay; Pointspay brokers the four loyalty programs behind one API.
-> **Version**: 1.0 (draft for evaluation) — 2026-06-30
+> **Status**: Planned · **Version**: 1.0 (draft for evaluation) — 2026-06-30
 
 ---
 
