@@ -1,0 +1,2420 @@
+openapi: 3.1.0
+info:
+  title: Pointspay Loyalty Orchestrator API
+  version: 1.0.0-planned
+  summary: One API for every loyalty program. Link members, quote, burn, earn and reverse points.
+  description: |
+    **Planned, not yet callable.** Shared for integration planning and feedback.
+
+    One API for every loyalty program. The same calls work for every program, and programs differ only in data: the
+    program descriptor (`GET /programs/{programCode}`) and the `nextStep` in each response. If you find yourself writing
+    `if programCode == …`, tell us, because the contract should carry that difference as data.
+
+    Pointspay moves points only. You keep the cash leg and the customer, and no card data passes through this API.
+
+    - **Every call is server to server.** Your browser or app only opens a `redirectUrl`, hosts your completion page, and
+      collects an OTP the member types.
+    - **Partner authentication:** send either the `X-API-Key` + `X-Partner-Code` headers, or an OAuth2 bearer token from
+      `POST /oauth2/token`. Never both.
+    - **Member-scoped calls** also carry `X-Member-Token`.
+    - **Every `POST` and `DELETE` requires `X-Idempotency-Key`**, except `/oauth2/token`, `/redemptions/quote` and
+      `/accruals/estimate`, which have no side effects. A repeat with the same key and body replays the original response.
+    - **Enums are open.** Treat an unknown value as "not supported": hide the program or the option.
+
+    The integration guide (`LOYALTY_ORCHESTRATOR_INTEGRATION.md`) walks through every journey as a recipe. The examples
+    in this file double as sandbox data: run `scripts/mock-check.sh` or `npx @stoplight/prism-cli mock` against it.
+  contact:
+    name: Pointspay Integration Team
+    url: https://pointspay.github.io/api-documentation/
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Pointspay-Proprietary
+servers:
+  - url: https://api.pointspay.com/loyalty/v1
+    description: Production (planned)
+  - url: https://lorch-sandbox.pointspay.com/loyalty/v1
+    description: Hosted mock sandbox (planned)
+  - url: http://127.0.0.1:4010
+    description: Local mock (Prism on this file)
+security:
+  - apiKey: []
+    partnerCode: []
+  - oauth2: []
+tags:
+  - name: Auth
+    description: Partner access tokens (OAuth2 client credentials).
+  - name: Programs
+    description: Program catalog and capability descriptors.
+  - name: Members
+    description: Sign-in (member context), member-number check, member profile, token and balance.
+  - name: Redemptions
+    description: Quote, burn, verification (OTP or redirect), status and reversal of burned points.
+  - name: Accruals
+    description: Earn estimate, earn (now or scheduled), status and reversal of earned points.
+  - name: Reconciliation
+    description: Transaction listing and event replay.
+
+paths:
+  /oauth2/token:
+    post:
+      tags: [Auth]
+      operationId: createAccessToken
+      summary: Get a partner access token (OAuth2 client credentials)
+      description: |
+        The alternative to sending `X-API-Key` on every call. Authenticate with HTTP Basic: the client id is your
+        partner code and the client secret is your API key. Ask for the scopes you need. The token is a JWT
+        (`typ: at+jwt`, audience `https://api.pointspay.com/loyalty/v1`) and lasts 900 seconds. Fetch a new one before
+        it expires; there is no refresh token.
+      security:
+        - clientBasic: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type]
+              properties:
+                grant_type:
+                  type: string
+                  const: client_credentials
+                scope:
+                  type: string
+                  description: Space-separated scopes. Omit for all scopes granted to your key.
+                  examples: ["loyalty.read loyalty.member loyalty.burn"]
+      responses:
+        "200":
+          description: Access token issued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccessToken"
+              example:
+                access_token: eyJhbGciOiJSUzI1NiIsInR5cCI6ImF0K2p3dCJ9.eyJzdWIiOiJwYXJ0bmVyIn0.c2ln
+                token_type: Bearer
+                expires_in: 900
+                scope: loyalty.read loyalty.member loyalty.burn
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /programs:
+    get:
+      tags: [Programs]
+      operationId: listPrograms
+      summary: List the programs enabled for you
+      description: Cache for up to 5 minutes. Show only programs with `availability` other than `UNAVAILABLE`.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.read]
+      responses:
+        "200":
+          description: Enabled programs with their descriptors.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl5m"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [programs]
+                properties:
+                  programs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Program"
+              examples:
+                all:
+                  $ref: "#/components/examples/ProgramList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /programs/{programCode}:
+    get:
+      tags: [Programs]
+      operationId: getProgram
+      summary: Get one program's descriptor
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.read]
+      parameters:
+        - $ref: "#/components/parameters/ProgramCode"
+      responses:
+        "200":
+          description: The program descriptor.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl5m"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Program"
+              examples:
+                FLB:
+                  $ref: "#/components/examples/ProgramFLB"
+                ETH:
+                  $ref: "#/components/examples/ProgramETH"
+                SAS:
+                  $ref: "#/components/examples/ProgramSAS"
+                MAM:
+                  $ref: "#/components/examples/ProgramMAM"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /auth/member-context:
+    post:
+      tags: [Members]
+      operationId: startMemberSignIn
+      summary: Start a member sign-in (link the member's program account)
+      description: |
+        Open a blank popup (web) or system browser sheet (app) on the member's click first, then call this, then point
+        the popup at `redirectUrl`. When the member finishes, Pointspay sends the popup to
+        `redirectCompletionUrl?contextRef=…&status=…`. That status is a hint only. Confirm it with
+        `GET /auth/member-context/{contextRef}` or the `member-context.completed` webhook, then get a token with
+        `POST /members/{memberRef}/token`.
+
+        A context is not tied to an order: link at any point in the funnel. If a saved link is still valid, the
+        response is `READY` immediately, with no redirect.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.member]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberContextRequest"
+            example:
+              programCode: FLB
+              redirectCompletionUrl: https://partner.example/loyalty/complete
+              saveLink: true
+      responses:
+        "200":
+          description: Sign-in started (`PENDING`), or already `READY` from a saved link.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberContext"
+              examples:
+                redirect:
+                  summary: The member must sign in at the program
+                  value:
+                    contextRef: ctx_8Jk2p
+                    programCode: FLB
+                    status: PENDING
+                    nextStep: REDIRECT
+                    redirectUrl: https://api.pointspay.com/loyalty/v1/auth/redirect/ctx_8Jk2p
+                    expiresAt: "2026-06-30T12:15:00Z"
+                ready:
+                  summary: A saved link is still valid
+                  value:
+                    contextRef: ctx_3Lm9q
+                    programCode: FLB
+                    status: READY
+                    nextStep: NONE
+                    memberRef: mbr_7Qx2
+                    expiresAt: "2026-06-30T12:15:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ProgramUnavailable"
+        "425":
+          $ref: "#/components/responses/TooEarly"
+        "504":
+          $ref: "#/components/responses/Timeout"
+  /auth/member-context/{contextRef}:
+    parameters:
+      - name: contextRef
+        in: path
+        required: true
+        schema:
+          type: string
+        example: ctx_8Jk2p
+    get:
+      tags: [Members]
+      operationId: getMemberSignIn
+      summary: Poll a sign-in until it leaves PENDING
+      description: Poll every 1–2 seconds from the moment the popup opens, until `status` is not `PENDING` or `expiresAt` passes.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.member]
+      responses:
+        "200":
+          description: Current sign-in status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberContext"
+              examples:
+                ready:
+                  value:
+                    contextRef: ctx_8Jk2p
+                    programCode: FLB
+                    status: READY
+                    nextStep: NONE
+                    memberRef: mbr_7Qx2
+                    expiresAt: "2026-06-30T12:15:00Z"
+                failed:
+                  value:
+                    contextRef: ctx_8Jk2p
+                    programCode: FLB
+                    status: FAILED
+                    nextStep: NONE
+                    failureReason: SIGN_IN_FAILED
+                    expiresAt: "2026-06-30T12:15:00Z"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Members]
+      operationId: cancelMemberSignIn
+      summary: Cancel a pending sign-in (the member closed the popup)
+      description: A sign-in that is no longer `PENDING` is left as it is, and its current status is returned.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.member]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Sign-in cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberContext"
+              example:
+                contextRef: ctx_8Jk2p
+                programCode: FLB
+                status: CANCELLED
+                nextStep: NONE
+                failureReason: MEMBER_CANCELLED
+                expiresAt: "2026-06-30T12:15:00Z"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /members/validate:
+    post:
+      tags: [Members]
+      operationId: validateMemberNumber
+      summary: Check a member number without sign-in
+      description: |
+        Always answers `200` with `result`. `NOT_VERIFIED` does not say whether the number exists, so a caller cannot
+        probe numbers. Errors mean only that the check could not run. Limit: 5 checks per member number per hour, then
+        `429 LOYALTY_VELOCITY_LIMIT`. The returned `memberRef` has `linkLevel: NUMBER_VERIFIED`: enough to read the tier
+        and to earn (where `capabilities.earnWithoutSignIn`), not enough for balance or burn. This call reaches the
+        program live; use a client timeout of 5 seconds.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.member]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateRequest"
+            example:
+              programCode: ETH
+              memberNumber: "100200300"
+              firstName: Ada
+              lastName: Doe
+      responses:
+        "200":
+          description: The check ran.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidateResult"
+              examples:
+                verified:
+                  value:
+                    result: VERIFIED
+                    memberRef: mbr_ETH_4kP9
+                    programCode: ETH
+                    linkLevel: NUMBER_VERIFIED
+                    memberNumberMasked: "*****0300"
+                notVerified:
+                  value:
+                    result: NOT_VERIFIED
+                    programCode: ETH
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ProgramUnavailable"
+        "504":
+          $ref: "#/components/responses/Timeout"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "425":
+          $ref: "#/components/responses/TooEarly"
+  /members/{memberRef}:
+    parameters:
+      - $ref: "#/components/parameters/MemberRef"
+    get:
+      tags: [Members]
+      operationId: getMember
+      summary: Get a linked member's profile, tier and benefits
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.member]
+      responses:
+        "200":
+          description: The member profile. `tier` and `benefits` appear only when the program supports them.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+              example:
+                memberRef: mbr_7Qx2
+                programCode: FLB
+                memberNumberMasked: "******4321"
+                linkLevel: SIGNED_IN
+                savedLink:
+                  active: true
+                  expiresAt: "2026-09-28T12:00:00Z"
+                tier:
+                  standard: GOLD
+                  programTierCode: R
+                  programTierName: Gold
+                benefits:
+                  - code: PRIORITY_CHECKIN
+                    description: Priority check-in
+                    validUntil: "2027-03-31"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Members]
+      operationId: unlinkMember
+      summary: Unlink a member (revoke tokens, forget the saved link)
+      description: |
+        After unlinking, member-scoped calls for this `memberRef` fail. Scheduled accruals still run unless you reverse
+        them, and operation records are kept for accounting.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.member]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "204":
+          description: Unlinked.
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /members/{memberRef}/token:
+    parameters:
+      - $ref: "#/components/parameters/MemberRef"
+    post:
+      tags: [Members]
+      operationId: createMemberToken
+      summary: Get a member token for member-scoped calls
+      description: |
+        Returns a fresh member token (15 minutes) while the member's sign-in session or saved link is valid. When
+        neither is, it answers `401 LOYALTY_RELINK_REQUIRED`: run the sign-in again. Keep the token on your server;
+        never send it to a browser or app.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.member]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Member token issued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberToken"
+              example:
+                memberToken: mtk_eyJhbGciOiJSUzI1NiJ9.c2Vzc2lvbg.c2ln
+                memberRef: mbr_7Qx2
+                expiresAt: "2026-06-30T12:20:00Z"
+        "401":
+          $ref: "#/components/responses/RelinkRequired"
+  /members/{memberRef}/balance:
+    parameters:
+      - $ref: "#/components/parameters/MemberRef"
+    get:
+      tags: [Members]
+      operationId: getBalance
+      summary: Get the member's points balance
+      description: |
+        Served from a cache: `asOf` is at most 60 seconds old (`source: CACHED`), target p99 under 300 ms.
+        `fresh=true` calls the program live (`source: LIVE`) with no latency target; use a 5-second client timeout.
+      security:
+        - apiKey: []
+          partnerCode: []
+          memberToken: []
+        - oauth2: [loyalty.member]
+          memberToken: []
+      parameters:
+        - name: currency
+          in: query
+          description: Currency for `cashValue` (ISO 4217).
+          schema:
+            type: string
+            pattern: "^[A-Z]{3}$"
+          example: EUR
+        - name: fresh
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: The balance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Balance"
+              example:
+                memberRef: mbr_7Qx2
+                programCode: FLB
+                points: 48500
+                pointsUnitLabel: Miles
+                cashValue:
+                  value: 48500
+                  currency: EUR
+                expiringPoints: []
+                asOf: "2026-06-30T12:04:31Z"
+                source: CACHED
+        "401":
+          $ref: "#/components/responses/RelinkRequired"
+        "503":
+          $ref: "#/components/responses/ProgramUnavailable"
+
+  /redemptions/quote:
+    post:
+      tags: [Redemptions]
+      operationId: quoteRedemption
+      summary: Price a burn (full or partial)
+      description: |
+        Send the order as `lines`. Pointspay returns the eligible amount (from the program's `eligibleLineTypes`), the
+        points, their value and the cash you still charge. Omit `points` to pay the whole eligible amount. The quote never
+        calls the program and has no side effects. Each call returns a new `quoteRef`, valid until `expiresAt`. Target
+        p99 is under 300 ms. See the guide for the rounding rules, so your slider matches the server exactly.
+      security:
+        - apiKey: []
+          partnerCode: []
+          memberToken: []
+        - oauth2: [loyalty.burn]
+          memberToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteRequest"
+            example:
+              programCode: ETH
+              memberRef: mbr_ETH_9sQ3
+              lines:
+                - type: ROOM
+                  amount: { value: 20000, currency: EUR }
+                - type: TAX
+                  amount: { value: 5000, currency: EUR }
+              points: 8000
+      responses:
+        "200":
+          description: The quote.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+              example:
+                quoteRef: q_ETH_abc1
+                expiresAt: "2026-06-30T12:20:00Z"
+                programCode: ETH
+                memberRef: mbr_ETH_9sQ3
+                totalAmount: { value: 25000, currency: EUR }
+                eligibleAmount: { value: 20000, currency: EUR }
+                points: 8000
+                pointsValue: { value: 8000, currency: EUR }
+                cashRemainder: { value: 17000, currency: EUR }
+                rate:
+                  points: 100
+                  amount: { value: 100, currency: EUR }
+                minPoints: 1000
+                maxPoints: 20000
+                pointsIncrement: 100
+                balance: 48500
+                appliedPromotions: []
+                nextStep: NONE
+        "401":
+          $ref: "#/components/responses/RelinkRequired"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /redemptions:
+    post:
+      tags: [Redemptions]
+      operationId: createRedemption
+      summary: Burn points against a quote
+      description: |
+        Burn exactly what the quote priced: `points` must equal the quote's points, or `422 LOYALTY_QUOTE_MISMATCH`; a
+        quote past its `expiresAt` gives `422 LOYALTY_QUOTE_EXPIRED`.
+        `200` means `REDEEMED`. `202` means the program needs a step: follow `nextStep` (`SUBMIT_OTP` or `REDIRECT`).
+        Charge `cashRemainder` only after `REDEEMED`. If your cash charge fails, or you do not complete the order,
+        reverse the burn in full. On a timeout the outcome is unknown: poll `GET /redemptions/{operationRef}`, or repeat
+        the call with the same idempotency key. Never repeat it with a new key.
+      security:
+        - apiKey: []
+          partnerCode: []
+          memberToken: []
+        - oauth2: [loyalty.burn]
+          memberToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RedemptionRequest"
+            example:
+              quoteRef: q_ETH_abc1
+              points: 8000
+              partnerOrderRef: ORD-2026-0099887
+              entityCode: NL01
+      responses:
+        "200":
+          description: Burned (`REDEEMED`), no extra step.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Redemption"
+              examples:
+                redeemed:
+                  $ref: "#/components/examples/RedemptionRedeemed"
+        "202":
+          description: The program needs a step. Follow `nextStep`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Redemption"
+              examples:
+                otp:
+                  summary: SUBMIT_OTP (e.g. a program that sends a code on every burn)
+                  value:
+                    operationRef: op_S9c40
+                    kind: BURN
+                    programCode: SAS
+                    memberRef: mbr_SAS_2vT8
+                    partnerOrderRef: ORD-2026-0100021
+                    status: PENDING_VERIFICATION
+                    nextStep: SUBMIT_OTP
+                    points: 9000
+                    pointsValue: { value: 9000, currency: SEK }
+                    reversedPoints: 0
+                    otp:
+                      maskedDestination: "+46 70 *** ** 12"
+                      expiresAt: "2026-06-30T12:10:00Z"
+                      attemptsRemaining: 3
+                      resendsRemaining: 2
+                    createdAt: "2026-06-30T12:05:00Z"
+                    updatedAt: "2026-06-30T12:05:00Z"
+                redirect:
+                  summary: REDIRECT (the member approves the burn at the program)
+                  value:
+                    operationRef: op_M7e88
+                    kind: BURN
+                    programCode: MAM
+                    memberRef: mbr_MAM_5hZ1
+                    partnerOrderRef: ORD-2026-0100022
+                    status: PENDING_VERIFICATION
+                    nextStep: REDIRECT
+                    points: 15000
+                    pointsValue: { value: 15000, currency: EUR }
+                    reversedPoints: 0
+                    redirectUrl: https://api.pointspay.com/loyalty/v1/redemptions/op_M7e88/redirect
+                    createdAt: "2026-06-30T12:05:00Z"
+                    updatedAt: "2026-06-30T12:05:00Z"
+        "401":
+          $ref: "#/components/responses/RelinkRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "425":
+          $ref: "#/components/responses/TooEarly"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ProgramUnavailable"
+        "504":
+          $ref: "#/components/responses/Timeout"
+  /redemptions/{operationRef}:
+    parameters:
+      - $ref: "#/components/parameters/OperationRef"
+    get:
+      tags: [Redemptions]
+      operationId: getRedemption
+      summary: Get a burn, with its reversals and history
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.read]
+      responses:
+        "200":
+          description: The burn.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Redemption"
+              examples:
+                redeemed:
+                  $ref: "#/components/examples/RedemptionRedeemed"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /redemptions/{operationRef}/otp:
+    parameters:
+      - $ref: "#/components/parameters/OperationRef"
+    post:
+      tags: [Redemptions]
+      operationId: submitRedemptionOtp
+      summary: Submit the OTP the member received
+      description: |
+        The member token lives 15 minutes, and a slow OTP entry or a resend can outlast it. If it is close to
+        `expiresAt`, get a new one first with `POST /members/{memberRef}/token`; a `401 LOYALTY_RELINK_REQUIRED` there
+        means the member must sign in again. The pending burn stays open until its own `expiresAt`.
+      security:
+        - apiKey: []
+          partnerCode: []
+          memberToken: []
+        - oauth2: [loyalty.burn]
+          memberToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otpCode]
+              properties:
+                otpCode:
+                  type: string
+                  examples: ["482913"]
+      responses:
+        "200":
+          description: Burned (`REDEEMED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Redemption"
+              examples:
+                redeemed:
+                  $ref: "#/components/examples/RedemptionRedeemed"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "401":
+          $ref: "#/components/responses/RelinkRequired"
+        "425":
+          $ref: "#/components/responses/TooEarly"
+        "504":
+          $ref: "#/components/responses/Timeout"
+  /redemptions/{operationRef}/otp/resend:
+    parameters:
+      - $ref: "#/components/parameters/OperationRef"
+    post:
+      tags: [Redemptions]
+      operationId: resendRedemptionOtp
+      summary: Send the member a new OTP
+      security:
+        - apiKey: []
+          partnerCode: []
+          memberToken: []
+        - oauth2: [loyalty.burn]
+          memberToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: A new code was sent. `otp.resendsRemaining` went down by one.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Redemption"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "401":
+          $ref: "#/components/responses/RelinkRequired"
+        "425":
+          $ref: "#/components/responses/TooEarly"
+  /redemptions/{operationRef}/reverse:
+    parameters:
+      - $ref: "#/components/parameters/OperationRef"
+    post:
+      tags: [Redemptions]
+      operationId: reverseRedemption
+      summary: Return burned points (full or partial)
+      description: |
+        Omit `points` to return everything not yet reversed. No member is involved. `200` means the reversal succeeded;
+        `202` means it is `PENDING`: wait for `reversal.updated` and do not re-submit. After a `FAILED` reversal, send
+        a new reverse with a new idempotency key. Reversals on one operation run one at a time: a second reverse while
+        one is `PENDING` gets `409 LOYALTY_OPERATION_IN_PROGRESS`. The sum of reversals never exceeds `points`
+        (`422 LOYALTY_REVERSAL_EXCEEDS_REMAINING`).
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.reverse]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReverseRequest"
+            example:
+              points: 800
+              reasonCode: CANCELLATION
+              partnerReversalRef: CXL-2026-0001
+              componentRef: car-1
+      responses:
+        "200":
+          description: Reversal succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Redemption"
+              examples:
+                partiallyReversed:
+                  $ref: "#/components/examples/RedemptionPartiallyReversed"
+        "202":
+          description: Reversal pending.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Redemption"
+        "409":
+          $ref: "#/components/responses/ReversalConflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+
+        "425":
+          $ref: "#/components/responses/TooEarly"
+        "504":
+          $ref: "#/components/responses/Timeout"
+  /accruals/estimate:
+    post:
+      tags: [Accruals]
+      operationId: estimateAccruals
+      summary: Estimate the points an order would earn (search, product page)
+      description: |
+        No member token is needed. Send up to 100 items and any number of programs. Pass `memberRef` to include tier and
+        targeted campaigns. It never calls the program: target p99 under 300 ms for 100 items. Cache results for display
+        for up to 15 minutes. An item's `estimateRef` pins its points when used on `POST /accruals` before `validUntil`.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.read]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EstimateRequest"
+            example:
+              programCodes: [FLB]
+              items:
+                - itemRef: hotel-123
+                  vertical: STAYS
+                  amount: { value: 45000, currency: EUR }
+      responses:
+        "200":
+          description: Estimates per item and program.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl15m"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstimateResult"
+              example:
+                validUntil: "2026-07-01T12:00:00Z"
+                items:
+                  - itemRef: hotel-123
+                    estimates:
+                      - programCode: FLB
+                        estimateRef: est_9Hc1
+                        points: 1350
+                        breakdown: { base: 450, promotion: 900, tier: 0 }
+                        appliedPromotions:
+                          - code: SUMMER3X
+                            label: 3x Miles
+                            multiplier: 3
+                        creditDelayDays: 14
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+  /accruals:
+    post:
+      tags: [Accruals]
+      operationId: createAccrual
+      summary: Earn points, now or after the trip
+      description: |
+        Send exactly one of `points`, `estimateRef` or `basisAmount`. With `creditAfter` (e.g. the checkout date), the
+        accrual is `SCHEDULED`: Pointspay holds it and credits the program on that date, with no member present.
+        Reversing it before then cancels it, with no program call. Without `creditAfter`, the program is credited now.
+        `X-Member-Token` is needed only when the program's `capabilities.earnWithoutSignIn` is false.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.earn]
+        - apiKey: []
+          partnerCode: []
+          memberToken: []
+        - oauth2: [loyalty.earn]
+          memberToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccrualRequest"
+            example:
+              programCode: FLB
+              memberRef: mbr_7Qx2
+              partnerOrderRef: ORD-2026-0100100
+              estimateRef: est_9Hc1
+              creditAfter: "2026-07-04"
+              travel:
+                vertical: STAYS
+                startDate: "2026-07-01"
+                endDate: "2026-07-04"
+      responses:
+        "200":
+          description: Credited now (`ACCRUED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Accrual"
+              examples:
+                accrued:
+                  $ref: "#/components/examples/AccrualAccrued"
+        "202":
+          description: Held until `creditAfter` (`SCHEDULED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Accrual"
+              examples:
+                scheduled:
+                  value:
+                    operationRef: acc_F1a2b
+                    kind: EARN
+                    programCode: FLB
+                    memberRef: mbr_7Qx2
+                    partnerOrderRef: ORD-2026-0100100
+                    status: SCHEDULED
+                    points: 1350
+                    pointsValue: { value: 2700, currency: EUR }
+                    reversedPoints: 0
+                    creditAfter: "2026-07-04"
+                    travel: { vertical: STAYS, startDate: "2026-07-01", endDate: "2026-07-04" }
+                    createdAt: "2026-06-30T12:05:00Z"
+                    updatedAt: "2026-06-30T12:05:00Z"
+        "401":
+          $ref: "#/components/responses/RelinkRequired"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "503":
+          $ref: "#/components/responses/ProgramUnavailable"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "425":
+          $ref: "#/components/responses/TooEarly"
+        "504":
+          $ref: "#/components/responses/Timeout"
+  /accruals/{operationRef}:
+    parameters:
+      - $ref: "#/components/parameters/OperationRef"
+    get:
+      tags: [Accruals]
+      operationId: getAccrual
+      summary: Get an accrual, with its reversals and history
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.read]
+      responses:
+        "200":
+          description: The accrual.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Accrual"
+              examples:
+                accrued:
+                  $ref: "#/components/examples/AccrualAccrued"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /accruals/{operationRef}/reverse:
+    parameters:
+      - $ref: "#/components/parameters/OperationRef"
+    post:
+      tags: [Accruals]
+      operationId: reverseAccrual
+      summary: Claw back earned points, or cancel a scheduled accrual
+      description: |
+        A `SCHEDULED` accrual is cancelled at once. For an `ACCRUED` one, the points are clawed back from the member. If
+        the member has already spent them, the reversal is `FAILED` with `failureCode: INSUFFICIENT_BALANCE`, and the
+        difference is settled in money through the statement file. Reversals on one operation run one at a time: a
+        second reverse while one is `PENDING` gets `409 LOYALTY_OPERATION_IN_PROGRESS`.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.reverse]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReverseRequest"
+            example:
+              reasonCode: PAYMENT_FAILED
+              partnerReversalRef: CLAW-2026-0042
+      responses:
+        "200":
+          description: Reversal succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Accrual"
+        "202":
+          description: Reversal pending.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Accrual"
+        "409":
+          $ref: "#/components/responses/ReversalConflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+
+        "425":
+          $ref: "#/components/responses/TooEarly"
+        "504":
+          $ref: "#/components/responses/Timeout"
+  /operations:
+    get:
+      tags: [Reconciliation]
+      operationId: listOperations
+      summary: List every burn and earn for reconciliation
+      description: |
+        Ordered by (`updatedAt`, `operationRef`). A reversal updates its parent's `updatedAt`, so
+        `updatedSince` catches it. Page with `cursor` until `nextCursor` is null. Filter by `partnerOrderRef` before
+        retrying a write whose idempotency key is older than 24 hours.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.read]
+      parameters:
+        - name: updatedSince
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: kind
+          in: query
+          schema:
+            $ref: "#/components/schemas/OperationKind"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/OperationStatus"
+        - name: partnerOrderRef
+          in: query
+          schema:
+            type: string
+        - name: entityCode
+          in: query
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        "200":
+          description: One page of operations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      description: "A burn (`kind: BURN`) or an earn (`kind: EARN`)."
+                      anyOf:
+                        - $ref: "#/components/schemas/Redemption"
+                        - $ref: "#/components/schemas/Accrual"
+                  nextCursor:
+                    type: [string, "null"]
+              examples:
+                page:
+                  $ref: "#/components/examples/OperationPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /events:
+    get:
+      tags: [Reconciliation]
+      operationId: listEvents
+      summary: Replay webhook events (last 30 days)
+      description: Use it to recover missed webhooks. Each item is the decoded payload of the signed event.
+      security:
+        - apiKey: []
+          partnerCode: []
+        - oauth2: [loyalty.read]
+      parameters:
+        - name: since
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One page of events, oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EventClaims"
+                  nextCursor:
+                    type: [string, "null"]
+              example:
+                items:
+                  - iss: https://api.pointspay.com/loyalty/v1
+                    aud: acme-travel
+                    jti: evt_4c91a0
+                    iat: 1782820000
+                    exp: 1782820300
+                    evt: operation.updated
+                    opr: op_E5b21
+                    knd: BURN
+                    prg: ETH
+                    stat: REDEEMED
+                    pts: 8000
+                    rpts: 0
+                    pref: ORD-2026-0099887
+                    oat: "2026-06-30T12:08:42Z"
+                nextCursor: null
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+webhooks:
+  member-context.completed:
+    post:
+      operationId: onMemberContextCompleted
+      summary: A sign-in left PENDING
+      description: Carries no token. Fetch one with `POST /members/{memberRef}/token`. Respond 2xx.
+      requestBody:
+        content:
+          application/jwt:
+            schema:
+              $ref: "#/components/schemas/EventClaims"
+      responses:
+        "200":
+          description: Acknowledged.
+  operation.updated:
+    post:
+      operationId: onOperationUpdated
+      summary: A burn or earn changed status
+      description: Out-of-order delivery is possible. The GET of the operation is authoritative.
+      requestBody:
+        content:
+          application/jwt:
+            schema:
+              $ref: "#/components/schemas/EventClaims"
+      responses:
+        "200":
+          description: Acknowledged.
+  reversal.updated:
+    post:
+      operationId: onReversalUpdated
+      summary: A reversal changed status
+      requestBody:
+        content:
+          application/jwt:
+            schema:
+              $ref: "#/components/schemas/EventClaims"
+      responses:
+        "200":
+          description: Acknowledged.
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Secret partner key, issued at onboarding. Server side only.
+    partnerCode:
+      type: apiKey
+      in: header
+      name: X-Partner-Code
+      description: Your partner code. Sent with `X-API-Key`.
+    oauth2:
+      type: oauth2
+      description: "Client credentials. Send the token as `Authorization: Bearer`. Do not also send `X-API-Key`."
+      flows:
+        clientCredentials:
+          tokenUrl: https://api.pointspay.com/loyalty/v1/oauth2/token
+          scopes:
+            loyalty.read: Catalog, estimates, operation reads, listings and events.
+            loyalty.member: Sign-in, member-number check, member profile, token and balance.
+            loyalty.burn: Quote, burn and OTP.
+            loyalty.earn: Accruals.
+            loyalty.reverse: Reversals of burns and accruals.
+    clientBasic:
+      type: http
+      scheme: basic
+      description: Client id = partner code, client secret = API key. Token endpoint only.
+    memberToken:
+      type: apiKey
+      in: header
+      name: X-Member-Token
+      description: From `POST /members/{memberRef}/token`. Lasts 15 minutes and is bound to one member and one partner.
+
+  parameters:
+    IdempotencyKey:
+      name: X-Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Required on every POST and DELETE except /oauth2/token, /redemptions/quote and /accruals/estimate. At least 16 characters, unique per operation. Same key and same body: the
+        original response is replayed. Same key and a different body: `409`. Still processing: `425` with
+        `Retry-After`. Keys are kept for 24 hours.
+      schema:
+        type: string
+        minLength: 16
+      example: 7a2d-burn-0002-ord-789
+    ProgramCode:
+      name: programCode
+      in: path
+      required: true
+      schema:
+        type: string
+      example: FLB
+    MemberRef:
+      name: memberRef
+      in: path
+      required: true
+      description: Opaque. Do not parse.
+      schema:
+        type: string
+      example: mbr_7Qx2
+    OperationRef:
+      name: operationRef
+      in: path
+      required: true
+      description: Opaque. Do not parse.
+      schema:
+        type: string
+      example: op_E5b21
+
+  headers:
+    CacheControl5m:
+      schema:
+        type: string
+      example: max-age=300
+    CacheControl15m:
+      schema:
+        type: string
+      example: max-age=900
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+      example: 2
+
+  responses:
+    BadRequest:
+      description: Malformed request, a missing idempotency key, or both auth methods sent.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: LOYALTY_VALIDATION_FAILED
+            message: "lines[0].amount.currency must be an ISO 4217 code."
+            key: loyalty.validation.failed
+            retryable: false
+            traceId: 5f1c2a9e7b
+    Unauthorized:
+      description: Missing or invalid partner credentials.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: LOYALTY_UNAUTHENTICATED
+            message: Partner credentials are missing or invalid.
+            key: loyalty.auth.unauthenticated
+            retryable: false
+            traceId: 5f1c2a9e7b
+    RelinkRequired:
+      description: The member token is missing, expired or revoked, and no saved link can renew it. Sign the member in again.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: LOYALTY_RELINK_REQUIRED
+            message: The member must sign in again.
+            key: loyalty.member.relink_required
+            retryable: false
+            traceId: 5f1c2a9e7b
+    Forbidden:
+      description: Scope missing, or refused on risk grounds.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: LOYALTY_RISK_DECLINED
+            message: The request was declined by risk controls.
+            key: loyalty.risk.declined
+            retryable: false
+            traceId: 5f1c2a9e7b
+    NotFound:
+      description: Unknown reference.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: LOYALTY_OPERATION_NOT_FOUND
+            message: No operation with this reference.
+            key: loyalty.operation.not_found
+            retryable: false
+            traceId: 5f1c2a9e7b
+    Conflict:
+      description: Idempotency key reused with a different body, or the operation is busy.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: LOYALTY_IDEMPOTENCY_CONFLICT
+            message: This idempotency key was used with a different request body.
+            key: loyalty.idempotency.conflict
+            retryable: false
+            traceId: 5f1c2a9e7b
+    ReversalConflict:
+      description: |
+        Either another reversal on this operation is still `PENDING` (`LOYALTY_OPERATION_IN_PROGRESS`, retry after
+        `Retry-After`), or this idempotency key was used with a different body (`LOYALTY_IDEMPOTENCY_CONFLICT`).
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            reversalInProgress:
+              summary: Another reversal on this operation is pending
+              value:
+                code: LOYALTY_OPERATION_IN_PROGRESS
+                message: Another reversal on this operation is still pending. Retry once it has settled.
+                key: loyalty.reversal.in_progress
+                retryable: true
+                traceId: 5f1c2a9e7b
+            idempotencyConflict:
+              summary: Same idempotency key, different body
+              value:
+                code: LOYALTY_IDEMPOTENCY_CONFLICT
+                message: This idempotency key was used with a different request body.
+                key: loyalty.idempotency.conflict
+                retryable: false
+                traceId: 5f1c2a9e7b
+    Unprocessable:
+      description: The request is valid but cannot be done. See the error code.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: LOYALTY_INSUFFICIENT_BALANCE
+            message: Member balance is insufficient for the requested redemption.
+            key: loyalty.redemption.insufficient_balance
+            retryable: false
+            traceId: 5f1c2a9e7b
+    TooEarly:
+      description: The first request with this idempotency key is still processing.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: LOYALTY_IDEMPOTENCY_IN_PROGRESS
+            message: A request with this idempotency key is still processing.
+            key: loyalty.idempotency.in_progress
+            retryable: true
+            traceId: 5f1c2a9e7b
+    TooManyRequests:
+      description: Rate or velocity limit reached.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: LOYALTY_VELOCITY_LIMIT
+            message: Too many attempts. Try again later.
+            key: loyalty.risk.velocity_limit
+            retryable: true
+            traceId: 5f1c2a9e7b
+    ProgramUnavailable:
+      description: The program is unavailable. Hide it, or fall back to cash.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: LOYALTY_PROGRAM_UNAVAILABLE
+            message: The loyalty program is temporarily unavailable.
+            key: loyalty.program.unavailable
+            retryable: true
+            traceId: 5f1c2a9e7b
+    Timeout:
+      description: The program did not answer in time.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: LOYALTY_TIMEOUT
+            message: The loyalty program did not respond in time.
+            key: loyalty.program.timeout
+            retryable: true
+            traceId: 5f1c2a9e7b
+
+  examples:
+    ProgramFLB:
+      summary: Flying Blue
+      value: &flb
+        programCode: FLB
+        displayName: Flying Blue
+        logoUrl: https://static.pointspay.com/programs/flb.svg
+        pointsUnitLabel: Miles
+        availability: AVAILABLE
+        authMode: REDIRECT
+        burnStep: NONE
+        burnStepConditional: false
+        savedLinkDays: 90
+        memberNumber:
+          label: Flying Blue number
+          pattern: "^[0-9A-Z]{6,20}$"
+          nameFields: [lastName]
+        verticals: [STAYS, CARS, FLIGHTS, ATTRACTIONS]
+        eligibleLineTypes: [ROOM, CAR, FLIGHT, OTHER]
+        capabilities:
+          memberNumberCheck: true
+          savedLink: true
+          earnWithoutSignIn: true
+          tier: true
+          benefits: false
+          pointsExpiry: false
+          partialReversal: true
+    ProgramETH:
+      summary: Etihad Guest
+      value: &eth
+        programCode: ETH
+        displayName: Etihad Guest
+        logoUrl: https://static.pointspay.com/programs/eth.svg
+        pointsUnitLabel: Miles
+        availability: AVAILABLE
+        authMode: REDIRECT
+        burnStep: NONE
+        burnStepConditional: true
+        savedLinkDays: 90
+        memberNumber:
+          label: Etihad Guest number
+          pattern: "^[0-9A-Z]{6,20}$"
+          nameFields: [firstName, lastName]
+        verticals: [STAYS, CARS, FLIGHTS, ATTRACTIONS]
+        eligibleLineTypes: [ROOM, CAR, FLIGHT, OTHER]
+        capabilities:
+          memberNumberCheck: true
+          savedLink: true
+          earnWithoutSignIn: true
+          tier: true
+          benefits: false
+          pointsExpiry: false
+          partialReversal: true
+    ProgramSAS:
+      summary: SAS EuroBonus
+      value: &sas
+        programCode: SAS
+        displayName: SAS EuroBonus
+        logoUrl: https://static.pointspay.com/programs/sas.svg
+        pointsUnitLabel: Points
+        availability: AVAILABLE
+        authMode: REDIRECT
+        burnStep: SUBMIT_OTP
+        burnStepConditional: false
+        savedLinkDays: null
+        memberNumber:
+          label: EuroBonus number
+          pattern: "^[0-9A-Z]{6,20}$"
+          nameFields: [lastName]
+        verticals: [STAYS, CARS, FLIGHTS, ATTRACTIONS]
+        eligibleLineTypes: [ROOM, CAR, FLIGHT, OTHER]
+        capabilities:
+          memberNumberCheck: true
+          savedLink: false
+          earnWithoutSignIn: false
+          tier: false
+          benefits: false
+          pointsExpiry: false
+          partialReversal: true
+    ProgramMAM:
+      summary: Miles & More
+      value: &mam
+        programCode: MAM
+        displayName: Miles & More
+        logoUrl: https://static.pointspay.com/programs/mam.svg
+        pointsUnitLabel: Miles
+        availability: AVAILABLE
+        authMode: REDIRECT
+        burnStep: REDIRECT
+        burnStepConditional: false
+        savedLinkDays: null
+        memberNumber:
+          label: Miles & More service card number
+          pattern: "^[0-9A-Z]{6,20}$"
+          nameFields: [lastName]
+        verticals: [STAYS, CARS, FLIGHTS, ATTRACTIONS]
+        eligibleLineTypes: [ROOM, CAR, FLIGHT, OTHER]
+        capabilities:
+          memberNumberCheck: false
+          savedLink: false
+          earnWithoutSignIn: false
+          tier: false
+          benefits: false
+          pointsExpiry: false
+          partialReversal: true
+    RedemptionRedeemed:
+      summary: A completed burn
+      value:
+        operationRef: op_E5b21
+        kind: BURN
+        programCode: ETH
+        memberRef: mbr_ETH_9sQ3
+        partnerOrderRef: ORD-2026-0099887
+        entityCode: NL01
+        status: REDEEMED
+        nextStep: NONE
+        points: 8000
+        pointsValue: { value: 8000, currency: EUR }
+        balanceAfter: 40500
+        reversedPoints: 0
+        reversals: []
+        statusUpdates:
+          - at: "2026-06-30T12:05:00Z"
+            status: REDEEMED
+            message: Points burned.
+            initiatedBy: { type: API_KEY, id: key_acme_01 }
+        createdAt: "2026-06-30T12:05:00Z"
+        updatedAt: "2026-06-30T12:05:00Z"
+    RedemptionPartiallyReversed:
+      summary: A burn with one partial reversal
+      value: &partrev
+        operationRef: op_B7n2
+        kind: BURN
+        programCode: ETH
+        memberRef: mbr_ETH_9sQ3
+        partnerOrderRef: ORD-2026-0100100
+        entityCode: NL01
+        status: PARTIALLY_REVERSED
+        nextStep: NONE
+        points: 2000
+        pointsValue: { value: 2000, currency: EUR }
+        reversedPoints: 800
+        reversals:
+          - reversalRef: rev_7c
+            points: 800
+            pointsValue: { value: 800, currency: EUR }
+            status: SUCCESS
+            reasonCode: CANCELLATION
+            partnerReversalRef: CXL-2026-0001
+            componentRef: car-1
+            initiatedBy: { type: API_KEY, id: key_acme_01 }
+            createdAt: "2026-06-30T15:20:00Z"
+            updatedAt: "2026-06-30T15:20:01Z"
+        statusUpdates:
+          - at: "2026-06-30T12:05:00Z"
+            status: REDEEMED
+            message: Points burned.
+            initiatedBy: { type: API_KEY, id: key_acme_01 }
+          - at: "2026-06-30T15:20:01Z"
+            status: PARTIALLY_REVERSED
+            message: 800 points returned.
+            initiatedBy: { type: API_KEY, id: key_acme_01 }
+        createdAt: "2026-06-30T12:05:00Z"
+        updatedAt: "2026-06-30T15:20:01Z"
+    ProgramList:
+      summary: All four programs
+      value:
+        programs: [*flb, *eth, *sas, *mam]
+    OperationPage:
+      summary: One page of the listing
+      value:
+        items: [*partrev]
+        nextCursor: cur_2026-06-30T15:20:00Z_op_B7n2
+    AccrualAccrued:
+      summary: A credited accrual
+      value:
+        operationRef: acc_F1a2b
+        kind: EARN
+        programCode: FLB
+        memberRef: mbr_7Qx2
+        partnerOrderRef: ORD-2026-0100100
+        status: ACCRUED
+        points: 1350
+        pointsValue: { value: 2700, currency: EUR }
+        reversedPoints: 0
+        reversals: []
+        expectedCreditDate: "2026-07-18"
+        travel: { vertical: STAYS, startDate: "2026-07-01", endDate: "2026-07-04" }
+        statusUpdates:
+          - at: "2026-07-04T00:10:00Z"
+            status: ACCRUED
+            message: Credited to the program.
+            initiatedBy: { type: API_KEY, id: key_acme_01 }
+        createdAt: "2026-06-30T12:05:00Z"
+        updatedAt: "2026-07-04T00:10:00Z"
+
+  schemas:
+    Money:
+      type: object
+      description: An amount in minor units (cents), e.g. 12345 EUR is EUR 123.45.
+      required: [value, currency]
+      properties:
+        value:
+          type: integer
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+    Error:
+      type: object
+      required: [code, message, key, retryable, traceId]
+      properties:
+        code:
+          type: string
+          description: Stable machine code. Switch on it. See the error catalog in the guide.
+        message:
+          type: string
+          description: English, for logs. Not for end users.
+        key:
+          type: string
+          description: Localisation key for your own user-facing message.
+        retryable:
+          type: boolean
+        traceId:
+          type: string
+          description: Quote it to support.
+    AccessToken:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          const: Bearer
+        expires_in:
+          type: integer
+          description: Seconds.
+        scope:
+          type: string
+    NextStep:
+      type: string
+      description: |
+        What you do next. Open enum: treat an unknown value as "not supported".
+        `NONE` nothing, the result is final. `REDIRECT` open `redirectUrl` in a popup or system browser sheet.
+        `SUBMIT_OTP` ask the member for the code and call `…/otp`. `SIGN_IN` the member must sign in first.
+      enum: [NONE, REDIRECT, SUBMIT_OTP, SIGN_IN]
+    Program:
+      type: object
+      required: [programCode, displayName, availability, authMode, burnStep, capabilities]
+      properties:
+        programCode:
+          type: string
+        displayName:
+          type: string
+        logoUrl:
+          type: string
+          format: uri
+        pointsUnitLabel:
+          type: string
+          description: What the program calls its points, e.g. "Miles".
+        availability:
+          type: string
+          enum: [AVAILABLE, DEGRADED, UNAVAILABLE]
+        authMode:
+          type: string
+          description: How the member signs in. `REDIRECT` at the program's own page. `DIRECT_OTP` a code, no page.
+          enum: [REDIRECT, DIRECT_OTP]
+        burnStep:
+          type: string
+          description: The extra step a burn needs. The same values as `nextStep`.
+          enum: [NONE, SUBMIT_OTP, REDIRECT]
+        burnStepConditional:
+          type: boolean
+          description: True when the program can demand an OTP on some burns only. Always follow the runtime `nextStep`.
+        savedLinkDays:
+          type: [integer, "null"]
+          description: How long a saved link lasts, in days. Null when the program has no saved link.
+        memberNumber:
+          type: object
+          description: What to ask the member for a member-number check.
+          properties:
+            label:
+              type: string
+            pattern:
+              type: string
+              description: Format check only.
+            nameFields:
+              type: array
+              items:
+                type: string
+                enum: [firstName, lastName]
+        verticals:
+          type: array
+          description: Verticals that earn with this program. Open enum.
+          items:
+            type: string
+            enum: [STAYS, CARS, FLIGHTS, ATTRACTIONS, TAXIS]
+        eligibleLineTypes:
+          type: array
+          description: Line types that points can pay for. The quote applies it for you.
+          items:
+            $ref: "#/components/schemas/LineType"
+        capabilities:
+          type: object
+          description: What this program supports through this API. A false flag means "not yet". Hide the feature.
+          properties:
+            memberNumberCheck:
+              type: boolean
+            savedLink:
+              type: boolean
+            earnWithoutSignIn:
+              type: boolean
+            tier:
+              type: boolean
+            benefits:
+              type: boolean
+            pointsExpiry:
+              type: boolean
+            partialReversal:
+              type: boolean
+    MemberContextRequest:
+      type: object
+      required: [programCode, redirectCompletionUrl]
+      properties:
+        programCode:
+          type: string
+        redirectCompletionUrl:
+          type: string
+          format: uri
+          description: Your page the sign-in returns to. Its origin must be registered at onboarding.
+        saveLink:
+          type: boolean
+          default: false
+          description: The member opted in to stay linked. Honoured where `capabilities.savedLink` is true.
+        riskContext:
+          $ref: "#/components/schemas/RiskContext"
+    MemberContext:
+      type: object
+      required: [contextRef, programCode, status, nextStep, expiresAt]
+      properties:
+        contextRef:
+          type: string
+        programCode:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, READY, FAILED, CANCELLED, EXPIRED]
+        nextStep:
+          $ref: "#/components/schemas/NextStep"
+        redirectUrl:
+          type: string
+          format: uri
+          description: Present while `PENDING`. Open it in the popup.
+        memberRef:
+          type: string
+          description: Present when `READY`.
+        failureReason:
+          type: string
+          enum: [MEMBER_CANCELLED, SIGN_IN_FAILED, PROGRAM_UNAVAILABLE, EXPIRED]
+        expiresAt:
+          type: string
+          format: date-time
+    ValidateRequest:
+      type: object
+      required: [programCode, memberNumber, lastName]
+      properties:
+        programCode:
+          type: string
+        memberNumber:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        riskContext:
+          $ref: "#/components/schemas/RiskContext"
+    ValidateResult:
+      type: object
+      required: [result, programCode]
+      properties:
+        result:
+          type: string
+          enum: [VERIFIED, NOT_VERIFIED]
+        memberRef:
+          type: string
+          description: Present when `VERIFIED`. The same `memberRef` a later sign-in returns for this member.
+        programCode:
+          type: string
+        linkLevel:
+          $ref: "#/components/schemas/LinkLevel"
+        memberNumberMasked:
+          type: string
+        tier:
+          $ref: "#/components/schemas/Tier"
+    LinkLevel:
+      type: string
+      description: |
+        `SIGNED_IN` the member signed in: all member calls work. `NUMBER_VERIFIED` only the number was checked: tier and
+        earn (where allowed), no balance or burn.
+      enum: [SIGNED_IN, NUMBER_VERIFIED]
+    Tier:
+      type: object
+      description: Present only when the program's `capabilities.tier` is true.
+      required: [standard]
+      properties:
+        standard:
+          type: string
+          description: The Pointspay standard tier, the same scale for every program. Open enum.
+          enum: [BASE, SILVER, GOLD, PLATINUM]
+        programTierCode:
+          type: string
+        programTierName:
+          type: string
+    Benefit:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: Open enum.
+          enum: [FREE_BAGGAGE, PRIORITY_CHECKIN, SEAT_SELECTION, LOUNGE, OTHER]
+        description:
+          type: string
+        validUntil:
+          type: string
+          format: date
+    Member:
+      type: object
+      required: [memberRef, programCode, linkLevel]
+      properties:
+        memberRef:
+          type: string
+        programCode:
+          type: string
+        memberNumberMasked:
+          type: string
+        linkLevel:
+          $ref: "#/components/schemas/LinkLevel"
+        savedLink:
+          type: object
+          properties:
+            active:
+              type: boolean
+            expiresAt:
+              type: [string, "null"]
+              format: date-time
+        tier:
+          $ref: "#/components/schemas/Tier"
+        benefits:
+          type: array
+          description: Present only when the program's `capabilities.benefits` is true.
+          items:
+            $ref: "#/components/schemas/Benefit"
+    MemberToken:
+      type: object
+      required: [memberToken, memberRef, expiresAt]
+      properties:
+        memberToken:
+          type: string
+        memberRef:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    Balance:
+      type: object
+      required: [memberRef, programCode, points, asOf, source]
+      properties:
+        memberRef:
+          type: string
+        programCode:
+          type: string
+        points:
+          type: integer
+        pointsUnitLabel:
+          type: string
+        cashValue:
+          $ref: "#/components/schemas/Money"
+        expiringPoints:
+          type: array
+          description: Present only when the program's `capabilities.pointsExpiry` is true.
+          items:
+            type: object
+            properties:
+              points:
+                type: integer
+              expiresAt:
+                type: string
+                format: date
+        asOf:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [CACHED, LIVE]
+    LineType:
+      type: string
+      description: Open enum.
+      enum: [ROOM, FLIGHT, CAR, TAX, FEE, INSURANCE, BAGGAGE, SEAT, OTHER]
+    Line:
+      type: object
+      required: [type, amount]
+      properties:
+        type:
+          $ref: "#/components/schemas/LineType"
+        amount:
+          $ref: "#/components/schemas/Money"
+    Rate:
+      type: object
+      description: "`points` points are worth `amount`. Already includes any burn promotion."
+      required: [points, amount]
+      properties:
+        points:
+          type: integer
+        amount:
+          $ref: "#/components/schemas/Money"
+    Promotion:
+      type: object
+      required: [code, label]
+      properties:
+        code:
+          type: string
+        label:
+          type: string
+          description: Display text, e.g. for a badge ("3x Miles").
+        multiplier:
+          type: number
+          description: Earn multiplier. Absent on burn promotions, whose effect is already in `rate`.
+    QuoteRequest:
+      type: object
+      required: [programCode, memberRef, lines]
+      properties:
+        programCode:
+          type: string
+        memberRef:
+          type: string
+        lines:
+          type: array
+          minItems: 1
+          description: The whole order, all in one currency.
+          items:
+            $ref: "#/components/schemas/Line"
+        points:
+          type: integer
+          description: Points the member chose. Omit to pay the whole eligible amount.
+        riskContext:
+          $ref: "#/components/schemas/RiskContext"
+    Quote:
+      type: object
+      required: [quoteRef, expiresAt, totalAmount, eligibleAmount, points, pointsValue, cashRemainder, rate, minPoints, maxPoints, pointsIncrement, nextStep]
+      properties:
+        quoteRef:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        programCode:
+          type: string
+        memberRef:
+          type: string
+        totalAmount:
+          $ref: "#/components/schemas/Money"
+        eligibleAmount:
+          $ref: "#/components/schemas/Money"
+        points:
+          type: integer
+        pointsValue:
+          $ref: "#/components/schemas/Money"
+        cashRemainder:
+          $ref: "#/components/schemas/Money"
+        rate:
+          $ref: "#/components/schemas/Rate"
+        minPoints:
+          type: integer
+        maxPoints:
+          type: integer
+          description: Capped by the eligible amount and the member's balance.
+        pointsIncrement:
+          type: integer
+        balance:
+          type: integer
+        appliedPromotions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Promotion"
+        nextStep:
+          description: The step the burn will need.
+          $ref: "#/components/schemas/NextStep"
+    RedemptionRequest:
+      type: object
+      required: [quoteRef, points, partnerOrderRef]
+      properties:
+        quoteRef:
+          type: string
+        points:
+          type: integer
+          description: Must equal the quote's points.
+        partnerOrderRef:
+          type: string
+          description: Your order reference.
+        entityCode:
+          type: string
+          description: Your legal entity for this order. Used for multi-entity reporting.
+        relatedOperationRef:
+          type: string
+          description: Links an extra burn to an earlier one, e.g. a price increase on amendment.
+        redirectCompletionUrl:
+          type: string
+          format: uri
+          description: Where a `REDIRECT` step returns (`?operationRef=…&status=…`). Registered origin.
+        riskContext:
+          $ref: "#/components/schemas/RiskContext"
+    OperationKind:
+      type: string
+      enum: [BURN, EARN]
+    OperationStatus:
+      type: string
+      description: |
+        Burn: `PENDING_VERIFICATION`, then `REDEEMED`, `FAILED` or `EXPIRED`. Earn: `SCHEDULED`, then `ACCRUED` or
+        `FAILED`. Both, after reversals: `PARTIALLY_REVERSED`, then `REVERSED`. Pending or failed reversals appear only
+        in `reversals[].status`.
+      enum: [PENDING_VERIFICATION, REDEEMED, SCHEDULED, ACCRUED, FAILED, EXPIRED, PARTIALLY_REVERSED, REVERSED]
+    InitiatedBy:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [API_KEY, OAUTH_CLIENT, OPERATOR]
+        id:
+          type: string
+    StatusUpdate:
+      type: object
+      required: [at, status]
+      properties:
+        at:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/OperationStatus"
+        message:
+          type: string
+        initiatedBy:
+          $ref: "#/components/schemas/InitiatedBy"
+    Reversal:
+      type: object
+      required: [reversalRef, points, status, reasonCode, createdAt]
+      properties:
+        reversalRef:
+          type: string
+        points:
+          type: integer
+        pointsValue:
+          $ref: "#/components/schemas/Money"
+        status:
+          type: string
+          enum: [PENDING, SUCCESS, FAILED]
+        failureCode:
+          type: string
+          description: Open enum, e.g. `INSUFFICIENT_BALANCE`, `PROGRAM_REJECTED`.
+        reasonCode:
+          $ref: "#/components/schemas/ReasonCode"
+        partnerReversalRef:
+          type: string
+        componentRef:
+          type: string
+        initiatedBy:
+          $ref: "#/components/schemas/InitiatedBy"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ReasonCode:
+      type: string
+      description: Open enum.
+      enum: [CANCELLATION, AMENDMENT, PAYMENT_FAILED, MEMBER_CHANGE, DISPUTE, CHARGEBACK, OTHER]
+    ReverseRequest:
+      type: object
+      required: [reasonCode, partnerReversalRef]
+      properties:
+        points:
+          type: integer
+          description: Omit to reverse everything not yet reversed.
+        reasonCode:
+          $ref: "#/components/schemas/ReasonCode"
+        partnerReversalRef:
+          type: string
+          description: Your cancellation, refund or dispute reference.
+        componentRef:
+          type: string
+          description: Your label for the part of the order this reverses, e.g. one basket item.
+        note:
+          type: string
+    Operation:
+      type: object
+      required: [operationRef, kind, programCode, memberRef, partnerOrderRef, status, points, reversedPoints, createdAt, updatedAt]
+      properties:
+        operationRef:
+          type: string
+        kind:
+          $ref: "#/components/schemas/OperationKind"
+        programCode:
+          type: string
+        memberRef:
+          type: string
+        partnerOrderRef:
+          type: string
+        entityCode:
+          type: string
+        relatedOperationRef:
+          type: string
+        status:
+          $ref: "#/components/schemas/OperationStatus"
+        points:
+          type: integer
+        pointsValue:
+          $ref: "#/components/schemas/Money"
+        reversedPoints:
+          type: integer
+        reversals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reversal"
+        statusUpdates:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatusUpdate"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Redemption:
+      allOf:
+        - $ref: "#/components/schemas/Operation"
+        - type: object
+          properties:
+            nextStep:
+              $ref: "#/components/schemas/NextStep"
+            redirectUrl:
+              type: string
+              format: uri
+              description: Present when `nextStep` is `REDIRECT`.
+            otp:
+              type: object
+              description: Present when `nextStep` is `SUBMIT_OTP`.
+              properties:
+                maskedDestination:
+                  type: string
+                expiresAt:
+                  type: string
+                  format: date-time
+                attemptsRemaining:
+                  type: integer
+                resendsRemaining:
+                  type: integer
+            balanceAfter:
+              type: integer
+    Travel:
+      type: object
+      properties:
+        vertical:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        pnr:
+          type: string
+          description: Reference only. Flight miles for the ticket itself come from the airline, not from this API.
+    AccrualRequest:
+      type: object
+      description: Send exactly one of `points`, `estimateRef` or `basisAmount`.
+      required: [programCode, memberRef, partnerOrderRef]
+      properties:
+        programCode:
+          type: string
+        memberRef:
+          type: string
+        partnerOrderRef:
+          type: string
+        entityCode:
+          type: string
+        points:
+          type: integer
+        estimateRef:
+          type: string
+          description: Pins the estimate's points when used before its `validUntil`.
+        basisAmount:
+          description: The amount the member paid in cash. Pointspay applies the earn rules and campaigns.
+          $ref: "#/components/schemas/Money"
+        creditAfter:
+          type: string
+          format: date
+          description: Hold the accrual (`SCHEDULED`) and credit on this date, e.g. the end of the stay.
+        travel:
+          $ref: "#/components/schemas/Travel"
+        relatedOperationRef:
+          type: string
+          description: The burn on the same order, when earning on the cash part.
+        riskContext:
+          $ref: "#/components/schemas/RiskContext"
+      oneOf:
+        - required: [points]
+        - required: [estimateRef]
+        - required: [basisAmount]
+    Accrual:
+      allOf:
+        - $ref: "#/components/schemas/Operation"
+        - type: object
+          properties:
+            creditAfter:
+              type: string
+              format: date
+            expectedCreditDate:
+              type: string
+              format: date
+              description: When the member should see the points at the program.
+            travel:
+              $ref: "#/components/schemas/Travel"
+    EstimateRequest:
+      type: object
+      required: [programCodes, items]
+      properties:
+        programCodes:
+          type: array
+          items:
+            type: string
+        memberRef:
+          type: string
+          description: Optional. Adds tier bonuses and targeted campaigns.
+        items:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            required: [itemRef, vertical, amount]
+            properties:
+              itemRef:
+                type: string
+              vertical:
+                type: string
+              amount:
+                $ref: "#/components/schemas/Money"
+              lines:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Line"
+    EstimateResult:
+      type: object
+      required: [validUntil, items]
+      properties:
+        validUntil:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            type: object
+            required: [itemRef, estimates]
+            properties:
+              itemRef:
+                type: string
+              estimates:
+                type: array
+                items:
+                  type: object
+                  required: [programCode, estimateRef, points]
+                  properties:
+                    programCode:
+                      type: string
+                    estimateRef:
+                      type: string
+                    points:
+                      type: integer
+                    breakdown:
+                      type: object
+                      properties:
+                        base:
+                          type: integer
+                        promotion:
+                          type: integer
+                        tier:
+                          type: integer
+                    appliedPromotions:
+                      type: array
+                      items:
+                        $ref: "#/components/schemas/Promotion"
+                    creditDelayDays:
+                      type: integer
+                      description: Days after the end of travel until the member should see the points.
+    RiskContext:
+      type: object
+      description: Your fraud signals. Send them on member-context, validate, quote, burn and accrual.
+      properties:
+        ipAddress:
+          type: string
+        deviceId:
+          type: string
+        partnerRiskScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Your score, 0 to 100, higher is riskier.
+    EventClaims:
+      type: object
+      description: |
+        The decoded payload of a signed webhook (compact JWS, RS256/384/512). Verify it against the JWKS at
+        `https://api.pointspay.com/loyalty/v1/.well-known/jwks.json`, check `iss`, `aud` and `exp`, and dedupe on `jti`.
+        Every delivery attempt is signed again with a fresh `iat` and `exp` and the same `jti`.
+      required: [iss, aud, jti, iat, exp, evt]
+      properties:
+        iss:
+          type: string
+          const: https://api.pointspay.com/loyalty/v1
+        aud:
+          type: string
+          description: Your partner code.
+        jti:
+          type: string
+        iat:
+          type: integer
+        exp:
+          type: integer
+        evt:
+          type: string
+          enum: [member-context.completed, operation.updated, reversal.updated]
+        ctx:
+          type: string
+          description: Context reference (member-context.completed).
+        mrf:
+          type: string
+          description: Member reference (member-context.completed, when READY).
+        rsn:
+          type: string
+          description: Failure reason (member-context.completed, when not READY).
+        opr:
+          type: string
+          description: Operation reference.
+        knd:
+          $ref: "#/components/schemas/OperationKind"
+        prg:
+          type: string
+          description: Program code.
+        stat:
+          type: string
+          description: Sign-in status, or operation status.
+        pts:
+          type: integer
+          description: Points of the operation.
+        rpts:
+          type: integer
+          description: Reversed points so far.
+        rvr:
+          type: string
+          description: Reversal reference (reversal.updated).
+        rstat:
+          type: string
+          description: Reversal status (reversal.updated).
+        cref:
+          type: string
+          description: Component reference (reversal.updated).
+        pref:
+          type: string
+          description: Your partnerOrderRef.
+        oat:
+          type: string
+          format: date-time
+          description: When the change happened.
