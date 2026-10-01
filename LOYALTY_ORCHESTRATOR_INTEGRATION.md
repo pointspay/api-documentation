@@ -177,12 +177,15 @@ read them from `GET /programs`, never from this table.
 |---|---|---|---|---|
 | Sign-in | Program page | Program page | Program page | Program page |
 | Extra step on each burn | None | OTP when Etihad asks | OTP | Approve at the program (redirect) |
-| Member-number check | Yes | Yes | Yes | Not yet |
-| Saved link | Yes | Yes | Not yet | Not yet |
-| Earn without sign-in | Yes | Yes | Not yet | Not yet |
-| Member tier | Yes | Yes | Not yet | Not yet |
-| Benefits, points expiry | Not yet | Not yet | Not yet | Not yet |
+| Member-number check | Yes | Yes | Yes | Ask |
+| Saved link | Yes | Yes | Ask | Ask |
+| Earn without sign-in | Yes | Yes | Ask | Ask |
+| Member tier | Yes | Yes | Ask | Ask |
+| Benefits, points expiry | Ask | Ask | Ask | Ask |
 | Full and partial reversal | Yes | Yes | Yes | Yes |
+
+**Ask** means the program does not offer it today and Pointspay has asked for it. When the program adds it, the
+descriptor flag turns `true` and the feature works with no change on your side.
 
 **Adding a program** needs no work on your side. It appears in `GET /programs`, and every recipe below works unchanged.
 
